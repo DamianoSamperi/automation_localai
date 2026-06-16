@@ -1,0 +1,122 @@
+---
+# ConfigMap con i target ping per ogni nodo
+# Ogni nodo pinga tutti gli altri cosi da avere una stima di latenza per ogni nodo
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: smokeping-config
+  namespace: observability
+data:
+  config.yml: |
+    modules:
+      icmp:
+        prober: icmp
+        timeout: 5s
+        icmp:
+          preferred_ip_protocol: ip4
+
+    targets:
+      - hosts:
+          - 192.168.0.200
+        module: icmp
+        labels:
+          node: ds-cluster-01-cp-01
+      - hosts:
+          - 192.168.0.201
+        module: icmp
+        labels:
+          node: ds-cluster-01-worker-01
+      - hosts:
+          - 192.168.0.202
+        module: icmp
+        labels:
+          node: ds-cluster-01-worker-02
+      - hosts:
+          - 192.168.0.204
+        module: icmp
+        labels:
+          node: ds-cluster-01-worker-03
+      - hosts:
+          - 192.168.0.205
+        module: icmp
+        labels:
+          node: ds-cluster-01-worker-04
+      - hosts:
+          - 192.168.1.99
+        module: icmp
+        labels:
+          node: jetsonorigin
+---
+# DaemonSet — gira su ogni nodo e pinga tutti gli altri
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: smokeping-prober
+  namespace: observability
+  labels:
+    app: smokeping-prober
+spec:
+  selector:
+    matchLabels:
+      app: smokeping-prober
+  template:
+    metadata:
+      labels:
+        app: smokeping-prober
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9374"
+        prometheus.io/path: "/metrics"
+    spec:
+      # NET_RAW necessario per ICMP ping
+      securityContext:
+        runAsNonRoot: false
+      containers:
+        - name: smokeping-prober
+          image: quay.io/superq/smokeping-prober:latest
+          args:
+            - --config.file=/etc/smokeping/config.yml
+            - --web.listen-address=:9374
+          ports:
+            - containerPort: 9374
+              name: metrics
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 50m
+              memory: 64Mi
+          securityContext:
+            capabilities:
+              add:
+                - NET_RAW   
+          volumeMounts:
+            - name: config
+              mountPath: /etc/smokeping
+      volumes:
+        - name: config
+          configMap:
+            name: smokeping-config
+      tolerations:
+        - operator: Exists
+---
+# PodMonitor — Prometheus scrapa i pod smokeping automaticamente
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: smokeping-prober
+  namespace: observability
+  labels:
+    release: prometheus-stack   # deve matchare il label del prometheus operator
+spec:
+  selector:
+    matchLabels:
+      app: smokeping-prober
+  namespaceSelector:
+    matchNames:
+      - observability
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s

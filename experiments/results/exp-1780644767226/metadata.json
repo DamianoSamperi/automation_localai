@@ -1,0 +1,34 @@
+{
+  "id": "exp-1780644767226",
+  "name": "cluster-2",
+  "startedAt": "2026-06-05T09:32:47.226191871+02:00",
+  "finishedAt": "2026-06-05T10:33:29.77284584+02:00",
+  "status": "done",
+  "clusters": [
+    {
+      "clusterId": "cluster-2",
+      "gatewayHost": "192.168.0.202",
+      "gatewayPort": 31497,
+      "model": "qwen_qwen3.5-2b",
+      "profileCsv": ""
+    }
+  ],
+  "reportFile": "experiments/results/exp-1780644767226/report.html",
+  "logs": [
+    "[09:32:47] Generating locustfiles...",
+    "[09:32:47] [cluster-2] profile: 5 lines",
+    "[09:32:47] Locustfile ready for cluster-2 → 192.168.0.202:31497 model=qwen_qwen3.5-2b",
+    "[09:32:47] Starting parallel load tests (inside cluster)...",
+    "[09:32:47] [cluster-2] locust → http://local-ai-cluster-2.local-ai.svc.cluster.local:8080 (ClusterIP, Istio sidecar active)",
+    "[09:32:47] [cluster-2] Locustfile encoded (2714 bytes → 3620 b64 chars)",
+    "[09:32:47] [cluster-2] Job locust-cluster-2-1780644767 created",
+    "[09:32:51] [cluster-2] Pod ready: locust-cluster-2-1780644767-x4qnx",
+    "[10:32:57] [cluster-2] ✅ locust job done",
+    "[10:32:57] Waiting 30s for Prometheus data flush...",
+    "[10:33:27] Fetching metrics from Prometheus...",
+    "[10:33:27] Scraping metrics for cluster-2...",
+    "[10:33:29] Generating HTML report...",
+    "[10:33:29] Report ready: experiments/results/exp-1780644767226/report.html",
+    "[10:33:29] Experiment complete."
+  ]
+}

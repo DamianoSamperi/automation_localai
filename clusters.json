@@ -1,0 +1,206 @@
+{
+  "nodes": [
+    {
+      "name": "jetsonorigin",
+      "host": "192.168.1.99",
+      "user": "administrator",
+      "arch": "arm64",
+      "isOrin": true,
+      "gpuType": "nvidia",
+      "gpuModel": "Orin"
+    },
+    {
+      "name": "ds-cluster-01-worker-01",
+      "host": "192.168.0.201",
+      "user": "administrator",
+      "arch": "amd64",
+      "isOrin": false,
+      "gpuType": "none",
+      "gpuModel": ""
+    },
+    {
+      "name": "ds-cluster-01-worker-02",
+      "host": "192.168.0.202",
+      "user": "administrator",
+      "arch": "amd64",
+      "isOrin": false,
+      "gpuType": "none",
+      "gpuModel": ""
+    },
+    {
+      "name": "ds-cluster-01-worker-03",
+      "host": "192.168.0.204",
+      "user": "administrator",
+      "arch": "amd64",
+      "isOrin": false,
+      "gpuType": "none",
+      "gpuModel": ""
+    },
+    {
+      "name": "ds-cluster-01-worker-04",
+      "host": "192.168.0.205",
+      "user": "administrator",
+      "arch": "amd64",
+      "isOrin": false,
+      "gpuType": "none",
+      "gpuModel": ""
+    }
+  ],
+  "clusters": [
+    {
+      "seqId": 1,
+      "id": "cluster-1",
+      "name": "cluster-orin-all-workers",
+      "masterNode": "ds-cluster-01-cp-01",
+      "workers": [
+        {
+          "nodeName": "ds-cluster-01-worker-01",
+          "replicas": 1,
+          "arch": "amd64",
+          "mem": 0,
+          "manualBackend": false
+        },
+        {
+          "nodeName": "ds-cluster-01-worker-02",
+          "replicas": 1,
+          "arch": "amd64",
+          "mem": 0,
+          "manualBackend": false
+        }
+      ],
+      "workerCount": 0,
+      "p2pToken": "b3RwOgogIGRodDoKICAgIGludGVydmFsOiAzNjAKICAgIGtleTogeml5Z0JiV2JnUHdKVjFFWWdhdjVmeGw1ZGoyZURGdmFaQXYxRlZNYVA2UgogICAgbGVuZ3RoOiA0MwogIGNyeXB0bzoKICAgIGludGVydmFsOiA5MDAwCiAgICBrZXk6IEdOTUtwOEhjQ045bmtNZkFpR1BtWHNNTzF2RUVSWVdiekxiTHFxNkZodVoKICAgIGxlbmd0aDogNDMKcm9vbTogZVRucHlaU0tjUUkwNnFXMTEwYjJ4NHRCVHlGOThqb1lrSjVMZlgwbDIzbwpyZW5kZXp2b3VzOiBabTU3bTlVbmtKTTR3RThhU3NyRjhiVEJVbTZCYnNEaklDWUoxRnhjQnNiCm1kbnM6IEdodUJIeHFkZFpMUUx3djIwcUp4ZVYzWFVRT0ZiQnJOWmcxSUlJZkhzejkKbWF4X21lc3NhZ2Vfc2l6ZTogMjA5NzE1MjAK",
+      "storageGb": 8,
+      "port": 8081,
+      "workerMemory": 0,
+      "model": "qwen_qwen3.5-0.8b",
+      "status": "stopped"
+    },
+    {
+      "seqId": 2,
+      "id": "cluster-2",
+      "name": "cluster-orin-node1",
+      "masterNode": "ds-cluster-01-worker-02",
+      "workers": [
+        {
+          "nodeName": "ds-cluster-01-worker-01",
+          "replicas": 1,
+          "arch": "amd64",
+          "mem": 0,
+          "manualBackend": false
+        }
+      ],
+      "workerCount": 0,
+      "p2pToken": "b3RwOgogIGRodDoKICAgIGludGVydmFsOiAzNjAKICAgIGtleTogUjVWM1pXSmhZMmhpTkRreU1XUmtaREU1T0dSaE56SmlOMlpoTnpZell6VTAKICAgIGxlbmd0aDogNDMKICBjcnlwdG86CiAgICBpbnRlcnZhbDogOTAwMAogICAga2V5OiBWMk5vYjNOMVpXWTVNREpsTkRNd1pXUmhaREk1T0dSaE56SmlOMlpoTnpZell6VTAKICAgIGxlbmd0aDogNDMKcm9vbTogY2x1c3Rlci1vcmluLWFscGhhLTIwMjYKcmVuZGV6dm91czogWkc5dWRDQmpiR2x1ZEdGeWNtRjBaV002TnpVek13Cm1kbnM6IExvY2FsQUktUDJQLU5vZGUtMDEKbWF4X21lc3NhZ2Vfc2l6ZTogMjA5NzE1MjAK",
+      "storageGb": 8,
+      "port": 8082,
+      "workerMemory": 0,
+      "model": "qwen_qwen3.5-2b",
+      "status": "stopped"
+    },
+    {
+      "seqId": 3,
+      "id": "cluster-3",
+      "name": "cluster-orin-node2",
+      "masterNode": "ds-cluster-01-worker-01",
+      "workers": [
+        {
+          "nodeName": "ds-cluster-01-worker-02",
+          "replicas": 1,
+          "arch": "amd64",
+          "mem": 0,
+          "manualBackend": false
+        }
+      ],
+      "workerCount": 0,
+      "p2pToken": "b3RwOgogIGRodDoKICAgIGludGVydmFsOiAzNjAKICAgIGtleTogT0hKalpYSnBaR014TkRreU1XUmtaREU1T0dSaE56SmlOMlpoTnpZell6VTAKICAgIGxlbmd0aDogNDMKICBjcnlwdG86CiAgICBpbnRlcnZhbDogOTAwMAogICAga2V5OiBUbU5vYjNOMVpXWTVNREpsTkRNd1pXUmhaREk1T0dSaE56SmlOMlpoTnpZell6VTAKICAgIGxlbmd0aDogNDMKcm9vbTogZWRnZS1jb21wdXRpbmctbmV0LWJldGEKcmVuZGV6dm91czogWkc5dWRDQmpiR2x1ZEdGeWNtRjBaV002TnpVek13Cm1kbnM6IExvY2FsQUktUDJQLU5vZGUtMDIKbWF4X21lc3NhZ2Vfc2l6ZTogMjA5NzE1MjAK",
+      "storageGb": 8,
+      "port": 8083,
+      "workerMemory": 0,
+      "model": "qwen_qwen3.5-0.8b",
+      "status": "stopped"
+    },
+    {
+      "seqId": 4,
+      "id": "cluster-4",
+      "name": "cluster-orin-1",
+      "masterNode": "jetsonorigin",
+      "workers": [],
+      "workerCount": 2,
+      "p2pToken": "b3RwOgogIGRodDoKICAgIGludGVydmFsOiAzNjAKICAgIGtleTogZHI5UTR0ZXM2OFpEWjZySXhNbGNuQnpVa2VfWFRDb0VleHFZQzRUSS1PeQogICAgbGVuZ3RoOiA0MwogIGNyeXB0bzoKICAgIGludGVydmFsOiA5MDAwCiAgICBrZXk6IFRXMy1oTUsydnRUNzNRM3c4RWJETms3UXBkYzFhRlo3WFVlSG5VWFJLbWsKICAgIGxlbmd0aDogNDMKcm9vbTogUENuaFRhMEVXMlY2VGUyMGVHc1ZoMko5X1hKel9ICnJlbmRlenZvdXM6IHYwVkc5UlQ5aDh4RVp0dDhON2hGaG4tT1QxRk9OOAptZG5zOiBMb2NhbEFJLVAyUC1jbHVzdGVyLTQKbWF4X21lc3NhZ2Vfc2l6ZTogMjA5NzE1MjAK",
+      "storageGb": 8,
+      "port": 8084,
+      "workerMemory": 0,
+      "model": "qwen3.5-27b",
+      "status": "stopped"
+    },
+    {
+      "seqId": 5,
+      "id": "cluster-5",
+      "name": "cluster-orin1",
+      "masterNode": "jetsonorigin",
+      "workers": [
+        {
+          "nodeName": "ds-cluster-01-worker-01",
+          "replicas": 1,
+          "arch": "amd64",
+          "mem": 0,
+          "manualBackend": false
+        }
+      ],
+      "workerCount": 0,
+      "p2pToken": "b3RwOgogIGRodDoKICAgIGludGVydmFsOiAzNjAKICAgIGtleTogNGVpcTE4UW9xRTVncHhrNjYwVEVYbElfUlk2SUtBZkZ2Tlk1a2dBdmVUSQogICAgbGVuZ3RoOiA0MwogIGNyeXB0bzoKICAgIGludGVydmFsOiA5MDAwCiAgICBrZXk6IEtfTFoxZDlmUm9GcVZ1WjRwaTNUdzZLYTlUdVVkbXFFaGJHZDV5WHlnbVMKICAgIGxlbmd0aDogNDMKcm9vbTogRHhwbGxqSXZaY1IxVkxsU3NwY0tmSW1lRk81NkIyCnJlbmRlenZvdXM6IEh2Nk1pcV9UanBwbVZwV1gyVU55b055RGlnYXgzagptZG5zOiBMb2NhbEFJLVAyUC1jbHVzdGVyLTUKbWF4X21lc3NhZ2Vfc2l6ZTogMjA5NzE1MjAK",
+      "storageGb": 8,
+      "port": 8085,
+      "workerMemory": 0,
+      "model": "qwen_qwen3.5-2b",
+      "status": "stopped"
+    },
+    {
+      "seqId": 6,
+      "id": "cluster-6",
+      "name": "Cluster (Master amd)(2 worker)",
+      "masterNode": "ds-cluster-01-worker-01",
+      "workers": [
+        {
+          "nodeName": "ds-cluster-01-worker-01",
+          "replicas": 1,
+          "arch": "amd64",
+          "mem": 0,
+          "manualBackend": false
+        },
+        {
+          "nodeName": "ds-cluster-01-worker-02",
+          "replicas": 1,
+          "arch": "amd64",
+          "mem": 0,
+          "manualBackend": false
+        }
+      ],
+      "workerCount": 0,
+      "p2pToken": "b3RwOgogIGRodDoKICAgIGludGVydmFsOiAzNjAKICAgIGtleTogdGoyQmJaTTJuY3M4ZTFxSTlycHRMSHMwNTJWNEtUWFBuaDRkaWowcDhRSQogICAgbGVuZ3RoOiA0MwogIGNyeXB0bzoKICAgIGludGVydmFsOiA5MDAwCiAgICBrZXk6IF90bUZwUGRfR29KSDZFY2lGczZmbXBpS0xmblRDcktNV3FwYmh3Uy13dnkKICAgIGxlbmd0aDogNDMKcm9vbTogbFNWbURoUjh0SXR3YktGRDNGN3g1TkpDcHk5SlNUCnJlbmRlenZvdXM6IDdLSXlqaGIwRUdrb2NWSkNrdFdya01DekJfalkzSQptZG5zOiBMb2NhbEFJLVAyUC1jbHVzdGVyLTYKbWF4X21lc3NhZ2Vfc2l6ZTogMjA5NzE1MjAK",
+      "storageGb": 8,
+      "port": 8086,
+      "workerMemory": 0,
+      "model": "qwen_qwen3.5-2b",
+      "status": "stopped"
+    },
+    {
+      "seqId": 7,
+      "id": "cluster-7",
+      "name": "Cluster Orin prova",
+      "masterNode": "jetsonorigin",
+      "workers": [],
+      "workerCount": 0,
+      "p2pToken": "b3RwOgogIGRodDoKICAgIGludGVydmFsOiAzNjAKICAgIGtleTogNk9TcUo0NkFqOHFpamJrM0VyWXhFS3NiYWxvcDNqeDd2Zl9pU3lPQkkyaAogICAgbGVuZ3RoOiA0MwogIGNyeXB0bzoKICAgIGludGVydmFsOiA5MDAwCiAgICBrZXk6IE5RWVZ0VWpRQjNSQnY1Vk1KWGdkSm93VlVFenZ1dGpqVGVnOUM3WkFsUTMKICAgIGxlbmd0aDogNDMKcm9vbTogaWN3RFVHbjNFVjRCWWw3N3ItX283b3M3RkxmS240CnJlbmRlenZvdXM6IGlKd01YdjZ4VEVEY0lIZUFoQVEzNDlPUnNDaUdsdwptZG5zOiBMb2NhbEFJLVAyUC1jbHVzdGVyLTcKbWF4X21lc3NhZ2Vfc2l6ZTogMjA5NzE1MjAK",
+      "storageGb": 8,
+      "port": 8087,
+      "workerMemory": 0,
+      "model": "qwen3.5-27b",
+      "status": "running",
+      "gatewayPort": 30126
+    }
+  ],
+  "nextSeqId": 7,
+  "prometheus": "http://192.168.0.200:32090"
+}

@@ -1,0 +1,787 @@
+// Package experiment handles parallel load test orchestration:
+//   - generates one locustfile per cluster
+//   - runs all locust processes concurrently
+//   - scrapes Prometheus for infra metrics
+//   - generates an interactive HTML Plotly report
+package experiment
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+)
+
+// ── Public Types ──────────────────────────────────────────────────────────────
+
+// ClusterTarget describes one master to test during an experiment.
+type ClusterTarget struct {
+	ClusterID   string `json:"clusterId"`
+	GatewayHost string `json:"gatewayHost"` // IP del master node, auto-resolved
+	GatewayPort int    `json:"gatewayPort"`
+	Model       string `json:"model"`
+	ProfileCSV  string `json:"profileCsv"` // content of the load profile CSV
+}
+
+// Experiment is the runtime state of one experiment run.
+type Experiment struct {
+	ID         string          `json:"id"`
+	Name       string          `json:"name"`
+	StartedAt  time.Time       `json:"startedAt"`
+	FinishedAt *time.Time      `json:"finishedAt,omitempty"`
+	Status     string          `json:"status"` // running | done | error
+	Clusters   []ClusterTarget `json:"clusters"`
+	ReportFile string          `json:"reportFile,omitempty"`
+	Logs       []string        `json:"logs,omitempty"`
+}
+
+// Manager owns all experiments.
+type Manager struct {
+	mu          sync.RWMutex
+	baseDir     string
+	prometheusURL string
+	experiments map[string]*Experiment
+	subs        map[string][]chan string
+}
+
+func NewManager(baseDir, prometheusURL string) *Manager {
+	os.MkdirAll(filepath.Join(baseDir, "locustfiles"), 0755)
+	os.MkdirAll(filepath.Join(baseDir, "results"), 0755)
+	return &Manager{
+		baseDir:       baseDir,
+		prometheusURL: prometheusURL,
+		experiments:   make(map[string]*Experiment),
+		subs:          make(map[string][]chan string),
+	}
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
+
+func (m *Manager) Start(name, globalProfile string, clusters []ClusterTarget) (string, error) {
+	id := fmt.Sprintf("exp-%d", time.Now().UnixMilli())
+	exp := &Experiment{
+		ID:        id,
+		Name:      name,
+		StartedAt: time.Now(),
+		Status:    "running",
+		Clusters:  clusters,
+	}
+	m.mu.Lock()
+	m.experiments[id] = exp
+	m.mu.Unlock()
+
+	go m.run(exp, globalProfile)
+	return id, nil
+}
+
+func (m *Manager) List() []*Experiment {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	list := make([]*Experiment, 0, len(m.experiments))
+	for _, e := range m.experiments {
+		list = append(list, e)
+	}
+	return list
+}
+
+func (m *Manager) Get(id string) *Experiment {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.experiments[id]
+}
+
+func (m *Manager) Subscribe(id string) chan string {
+	m.mu.RLock()
+	if m.experiments[id] == nil {
+		m.mu.RUnlock()
+		return nil
+	}
+	m.mu.RUnlock()
+
+	ch := make(chan string, 200)
+	m.mu.Lock()
+	m.subs[id] = append(m.subs[id], ch)
+	m.mu.Unlock()
+	return ch
+}
+
+func (m *Manager) ReportPath(id string) string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	exp := m.experiments[id]
+	if exp == nil {
+		return ""
+	}
+	return exp.ReportFile
+}
+
+// ── Internal run loop ─────────────────────────────────────────────────────────
+
+func (m *Manager) run(exp *Experiment, globalProfile string) {
+	addLog := func(msg string) {
+		m.mu.Lock()
+		exp.Logs = append(exp.Logs, fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05"), msg))
+		subs := m.subs[exp.ID]
+		m.mu.Unlock()
+		for _, ch := range subs {
+			select {
+			case ch <- msg:
+			default:
+			}
+		}
+		log.Printf("[exp:%s] %s", exp.ID, msg)
+	}
+
+	expDir := filepath.Join(m.baseDir, "results", exp.ID)
+	os.MkdirAll(expDir, 0755)
+
+	// 1. Generate one locustfile per cluster
+	addLog("Generating locustfiles...")
+	for i, ct := range exp.Clusters {
+		profile := ct.ProfileCSV
+		if profile == "" {
+			profile = globalProfile
+		}
+		if profile == "" {
+			addLog(fmt.Sprintf("⚠ [%s] profile CSV is EMPTY — locust will exit immediately!", ct.ClusterID))
+		} else {
+			lines := strings.Count(profile, "\n")
+			addLog(fmt.Sprintf("[%s] profile: %d lines", ct.ClusterID, lines))
+		}
+		lf := generateLocustfile(ct, profile)
+		lfPath := filepath.Join(m.baseDir, "locustfiles", fmt.Sprintf("locust_%s.py", ct.ClusterID))
+		if err := os.WriteFile(lfPath, []byte(lf), 0644); err != nil {
+			addLog(fmt.Sprintf("ERROR writing locustfile for %s: %v", ct.ClusterID, err))
+			continue
+		}
+		exp.Clusters[i] = ct
+		addLog(fmt.Sprintf("Locustfile ready for %s → %s:%d model=%s",
+			ct.ClusterID, ct.GatewayHost, ct.GatewayPort, ct.Model))
+	}
+
+	// 2. Run all locust processes in parallel as Kubernetes Jobs
+	addLog("Starting parallel load tests (inside cluster)...")
+	startTime := time.Now().UTC()
+
+	type result struct {
+		clusterID string
+		csvPrefix string
+		err       error
+	}
+	resultCh := make(chan result, len(exp.Clusters))
+	var wg sync.WaitGroup
+
+	for _, ct := range exp.Clusters {
+		ct := ct
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			csvPrefix := filepath.Join(expDir, "locust_"+ct.ClusterID)
+			lfPath := filepath.Join(m.baseDir, "locustfiles", fmt.Sprintf("locust_%s.py", ct.ClusterID))
+
+			// Host inside cluster: use ClusterIP service name
+			hostURL := fmt.Sprintf("http://local-ai-%s:%d", ct.ClusterID, 8080)
+			addLog(fmt.Sprintf("[%s] locust → %s (in-cluster)", ct.ClusterID, hostURL))
+
+			// Upload locustfile as ConfigMap so the Job pod can mount it
+			cmName := fmt.Sprintf("locust-%s", ct.ClusterID)
+			_, err := os.ReadFile(lfPath) // just verify file exists
+			if err != nil {
+				addLog(fmt.Sprintf("[%s] ERROR reading locustfile: %v", ct.ClusterID, err))
+				resultCh <- result{ct.ClusterID, csvPrefix, err}
+				return
+			}
+
+			// Create ConfigMap directly from file — avoids YAML indentation issues
+			// Delete existing first to allow re-runs
+			exec.Command("kubectl", "delete", "configmap", cmName, "-n", "local-ai", "--ignore-not-found=true").Run()
+			cmOut, cmErr := exec.Command("kubectl", "create", "configmap", cmName,
+				"-n", "local-ai",
+				fmt.Sprintf("--from-file=locustfile.py=%s", lfPath),
+				fmt.Sprintf("--from-literal=cluster-id=%s", ct.ClusterID),
+			).CombinedOutput()
+			if cmErr != nil {
+				addLog(fmt.Sprintf("[%s] ERROR creating configmap: %s", ct.ClusterID, string(cmOut)))
+				resultCh <- result{ct.ClusterID, csvPrefix, cmErr}
+				return
+			}
+			addLog(fmt.Sprintf("[%s] ConfigMap %s created from file", ct.ClusterID, cmName))
+
+			// Job name unique per experiment+cluster
+			jobName := fmt.Sprintf("locust-%s-%d", ct.ClusterID, startTime.Unix())
+
+			jobYAML := fmt.Sprintf(`apiVersion: batch/v1
+kind: Job
+metadata:
+  name: %s
+  namespace: local-ai
+  labels:
+    cluster-id: "%s"
+    role: locust
+    experiment: "%s"
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: locust
+          image: locustio/locust:2.32.3
+          command:
+            - locust
+            - -f
+            - /locust/locustfile.py
+            - --host
+            - %s
+            - --headless
+            - --only-summary
+            - --exit-code-on-error
+            - "0"
+            - --loglevel
+            - INFO
+          env:
+            - name: MODEL_NAME
+              value: "%s"
+            - name: CLUSTER_ID
+              value: "%s"
+          volumeMounts:
+            - name: locustfile
+              mountPath: /locust
+      volumes:
+        - name: locustfile
+          configMap:
+            name: %s`,
+				jobName, ct.ClusterID, exp.ID,
+				hostURL,
+				ct.Model, ct.ClusterID,
+				cmName)
+
+			jobFile := filepath.Join(os.TempDir(), jobName+".yaml")
+			os.WriteFile(jobFile, []byte(jobYAML), 0644)
+
+			jobOut, jobErr := exec.Command("kubectl", "apply", "-f", jobFile).CombinedOutput()
+			if jobErr != nil {
+				addLog(fmt.Sprintf("[%s] ERROR creating job: %s", ct.ClusterID, string(jobOut)))
+				resultCh <- result{ct.ClusterID, csvPrefix, jobErr}
+				return
+			}
+			addLog(fmt.Sprintf("[%s] Job %s created", ct.ClusterID, jobName))
+
+			// Stream logs from the job pod in real time
+			// Wait for pod to be running first
+			podName := ""
+			for i := 0; i < 30; i++ {
+				time.Sleep(3 * time.Second)
+				out, _ := exec.Command("kubectl", "get", "pods",
+					"-n", "local-ai",
+					"-l", fmt.Sprintf("job-name=%s", jobName),
+					"-o", "jsonpath={.items[0].metadata.name}",
+				).Output()
+				podName = strings.TrimSpace(string(out))
+				if podName != "" {
+					addLog(fmt.Sprintf("[%s] Pod ready: %s", ct.ClusterID, podName))
+					break
+				}
+			}
+
+			if podName != "" {
+				// Stream logs
+				logCmd := exec.Command("kubectl", "logs", "-n", "local-ai",
+					"-f", "--pod-running-timeout=60s", podName)
+				logOut, _ := logCmd.StdoutPipe()
+				logCmd.Stderr = logCmd.Stdout
+				logCmd.Start()
+
+				prevReqs := 0
+				buf := make([]byte, 0, 4096)
+				tmp := make([]byte, 512)
+				for {
+					n, err := logOut.Read(tmp)
+					if n > 0 {
+						buf = append(buf, tmp[:n]...)
+						for {
+							idx := strings.Index(string(buf), "\n")
+							if idx < 0 {
+								break
+							}
+							line := strings.TrimSpace(string(buf[:idx]))
+							buf = buf[idx+1:]
+							if line == "" {
+								continue
+							}
+							if strings.Contains(line, "Aggregated") || strings.Contains(line, "chat/completions") {
+								fields := strings.Fields(line)
+								if len(fields) >= 3 {
+									reqs := 0
+									fmt.Sscanf(fields[1], "%d", &reqs)
+									if reqs > prevReqs {
+										prevReqs = reqs
+										addLog(fmt.Sprintf("[%s] ✓ %d requests completed", ct.ClusterID, reqs))
+									}
+								}
+							} else if strings.Contains(line, "ERROR") ||
+								strings.Contains(line, "users") ||
+								strings.Contains(line, "spawning") ||
+								strings.Contains(line, "WARNING") {
+								addLog(fmt.Sprintf("[%s] %s", ct.ClusterID, line))
+							}
+						}
+					}
+					if err != nil {
+						break
+					}
+				}
+				logCmd.Wait()
+			}
+
+			// Wait for job completion
+			exec.Command("kubectl", "wait",
+				fmt.Sprintf("job/%s", jobName),
+				"-n", "local-ai",
+				"--for=condition=complete",
+				"--timeout=3600s",
+			).Run()
+
+			// Also accept failed condition (locust exits 1 on errors but test ran)
+			exec.Command("kubectl", "wait",
+				fmt.Sprintf("job/%s", jobName),
+				"-n", "local-ai",
+				"--for=condition=failed",
+				"--timeout=5s",
+			).Run()
+
+			// Fetch full logs for CSV parsing
+			if podName != "" {
+				logsOut, _ := exec.Command("kubectl", "logs", "-n", "local-ai", podName).Output()
+				csvFile := csvPrefix + "_stats.csv"
+				writeLocustSummaryCSV(csvFile, string(logsOut), ct.ClusterID)
+			}
+
+			// Cleanup: delete job and configmap
+			exec.Command("kubectl", "delete", "job", jobName, "-n", "local-ai", "--ignore-not-found=true").Run()
+			exec.Command("kubectl", "delete", "configmap", cmName, "-n", "local-ai", "--ignore-not-found=true").Run()
+
+			addLog(fmt.Sprintf("[%s] ✅ locust job done", ct.ClusterID))
+			resultCh <- result{ct.ClusterID, csvPrefix, nil}
+		}()
+	}
+
+	wg.Wait()
+	close(resultCh)
+	endTime := time.Now().UTC()
+
+	// Collect locust CSV paths
+	csvPaths := map[string]string{}
+	for r := range resultCh {
+		csvPaths[r.clusterID] = r.csvPrefix
+	}
+
+	// 3. Wait for Prometheus flush
+	addLog("Waiting 30s for Prometheus data flush...")
+	time.Sleep(30 * time.Second)
+
+	// 4. Scrape Prometheus
+	addLog("Fetching metrics from Prometheus...")
+	allMetrics := map[string]interface{}{}
+	for _, ct := range exp.Clusters {
+		addLog(fmt.Sprintf("Scraping metrics for %s...", ct.ClusterID))
+		metrics := scrapePrometheus(m.prometheusURL, ct.ClusterID, startTime, endTime)
+		allMetrics[ct.ClusterID] = metrics
+	}
+
+	// Save raw JSON
+	rawFile := filepath.Join(expDir, "metrics_raw.json")
+	if data, err := json.MarshalIndent(allMetrics, "", "  "); err == nil {
+		os.WriteFile(rawFile, data, 0644)
+	}
+
+	// 5. Generate HTML Plotly report
+	addLog("Generating HTML report...")
+	reportPath := filepath.Join(expDir, "report.html")
+	if err := generateReport(reportPath, exp, csvPaths, allMetrics, startTime, endTime); err != nil {
+		addLog("ERROR generating report: " + err.Error())
+	} else {
+		addLog("Report ready: " + reportPath)
+	}
+	addLog("Experiment complete.")
+
+	// Close subscriber channels
+	now := time.Now()
+	m.mu.Lock()
+	exp.FinishedAt = &now
+	exp.Status = "done"
+	exp.ReportFile = reportPath
+	subs := m.subs[exp.ID]
+	m.mu.Unlock()
+
+	for _, ch := range subs {
+		close(ch)
+	}
+}
+
+// ── Locustfile Generator ──────────────────────────────────────────────────────
+
+func generateLocustfile(ct ClusterTarget, profileCSV string) string {
+	// Safely embed CSV in Python triple-quoted string
+	safeCSV := strings.ReplaceAll(profileCSV, `\`, `\\`)
+	safeCSV = strings.ReplaceAll(safeCSV, `"""`, `\"\"\"`)
+	// Trim trailing whitespace from each CSV line (space after comma causes int() parse error)
+	csvLines := strings.Split(safeCSV, "\n")
+	for i, line := range csvLines {
+		fields := strings.Split(line, ",")
+		for j, f := range fields {
+			fields[j] = strings.TrimSpace(f)
+		}
+		csvLines[i] = strings.Join(fields, ",")
+	}
+	safeCSV = strings.Join(csvLines, "\n")
+
+	lines := []string{
+		fmt.Sprintf("# Auto-generated locustfile for cluster: %s", ct.ClusterID),
+		fmt.Sprintf("# Model: %s", ct.Model),
+		"import csv, io, os",
+		"from locust import HttpUser, task, between, LoadTestShape",
+		"",
+		fmt.Sprintf(`MODEL = os.getenv("MODEL_NAME", "%s")`, ct.Model),
+		fmt.Sprintf(`CLUSTER_ID = os.getenv("CLUSTER_ID", "%s")`, ct.ClusterID),
+		"",
+		`PROFILE_CSV = """` + safeCSV + `"""`,
+		"",
+		"profile = []",
+		"try:",
+		"    reader = csv.DictReader(io.StringIO(PROFILE_CSV))",
+		"    for row in reader:",
+		`        profile.append({"second": int(row["second"]), "users": int(row["users"])})`,
+		`    print(f"[{CLUSTER_ID}] Profile loaded: {len(profile)} entries, last={profile[-1] if profile else 'none'}")`,
+		"except Exception as e:",
+		`    print(f"Profile parse error: {e}")`,
+		"",
+		"",
+		"class LLMUser(HttpUser):",
+		"    wait_time = between(1, 15)",
+		`    long_context = "Questo è un test di contesto. " * 10 + "/no_think"`,
+		"",
+		"    @task",
+		"    def ask_llm(self):",
+		"        payload = {",
+		`            "model": MODEL,`,
+		`            "messages": [{"role": "user", "content": self.long_context}],`,
+		`            "temperature": 0.7,`,
+		`            "max_tokens": 600`,
+		"        }",
+		"        with self.client.post(",
+		`            "/v1/chat/completions",`,
+		"            json=payload,",
+		"            timeout=3600,",
+		"            catch_response=True,",
+		`            name=f"/v1/chat/completions [{CLUSTER_ID}]"`,
+		"        ) as response:",
+		"            if response.status_code == 200:",
+		"                response.success()",
+		"            else:",
+		`                response.failure(f"HTTP {response.status_code}: {response.text[:200]}")`,
+		"",
+		"",
+		"class CSVStrategy(LoadTestShape):",
+		"    def tick(self):",
+		"        if not profile:",
+		`            print("WARNING: profile is empty, stopping")`,
+		"            return None",
+		"        run_time = round(self.get_run_time())",
+		"        current_users = 0",
+		"        for entry in profile:",
+		"            if entry[\"second\"] <= run_time:",
+		"                current_users = entry[\"users\"]",
+		"            else:",
+		"                break",
+		"        if run_time > profile[-1][\"second\"] + 60:",
+		"            return None",
+		"        return (current_users, 1)",
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
+// ── Prometheus Scraper ────────────────────────────────────────────────────────
+
+// metricQueries returns the PromQL queries for one cluster.
+// Labels use the pattern <clusterID>_master and <clusterID>_worker_* for Istio telemetry.
+// Covers: load-aware metrics (CPU/RAM/pressure) + network-aware metrics (RTT, bandwidth, saturation).
+func metricQueries(clusterID string) map[string]string {
+	return map[string]string{
+
+		// =====================================================================
+		// CONTAINER RESOURCES — Master
+		// =====================================================================
+		"ram_master": fmt.Sprintf(
+			`sum(container_memory_usage_bytes{namespace="local-ai", pod=~"local-ai-%s-.*"})`, clusterID),
+		"cpu_master": fmt.Sprintf(
+			`sum(rate(container_cpu_usage_seconds_total{namespace="local-ai", pod=~"local-ai-%s-.*"}[30s]))`, clusterID),
+		"network_tx_master": fmt.Sprintf(
+			`sum(rate(container_network_transmit_bytes_total{namespace="local-ai", pod=~"local-ai-%s-.*"}[30s]))`, clusterID),
+		"network_rx_master": fmt.Sprintf(
+			`sum(rate(container_network_receive_bytes_total{namespace="local-ai", pod=~"local-ai-%s-.*"}[30s]))`, clusterID),
+
+		// =====================================================================
+		// CONTAINER RESOURCES — Workers
+		// =====================================================================
+		"ram_workers": fmt.Sprintf(
+			`sum(container_memory_usage_bytes{namespace="local-ai", pod=~"localai-worker-%s-.*"})`, clusterID),
+		"cpu_workers": fmt.Sprintf(
+			`sum(rate(container_cpu_usage_seconds_total{namespace="local-ai", pod=~"localai-worker-%s-.*"}[30s]))`, clusterID),
+		"network_tx_workers": fmt.Sprintf(
+			`sum(rate(container_network_transmit_bytes_total{namespace="local-ai", pod=~"localai-worker-%s-.*"}[30s]))`, clusterID),
+		"network_rx_workers": fmt.Sprintf(
+			`sum(rate(container_network_receive_bytes_total{namespace="local-ai", pod=~"localai-worker-%s-.*"}[30s]))`, clusterID),
+
+		// =====================================================================
+		// ISTIO — Latenza Gateway→Master (tempo risposta per richiesta)
+		// destination_app = <clusterID>_master
+		// =====================================================================
+		"istio_req_total": fmt.Sprintf(
+			`sum(rate(istio_requests_total{destination_app=~"%s_master",reporter="destination"}[30s]))`, clusterID),
+		// Latenza end-to-end Gateway→Master P50/P95/P99
+		"istio_latency_p50": fmt.Sprintf(
+			`histogram_quantile(0.50, sum(rate(istio_request_duration_milliseconds_bucket{destination_app=~"%s_master",reporter="destination"}[30s])) by (le))`, clusterID),
+		"istio_latency_p95": fmt.Sprintf(
+			`histogram_quantile(0.95, sum(rate(istio_request_duration_milliseconds_bucket{destination_app=~"%s_master",reporter="destination"}[30s])) by (le))`, clusterID),
+		"istio_latency_p99": fmt.Sprintf(
+			`histogram_quantile(0.99, sum(rate(istio_request_duration_milliseconds_bucket{destination_app=~"%s_master",reporter="destination"}[30s])) by (le))`, clusterID),
+
+		// =====================================================================
+		// ISTIO — Traffico TCP P2P Master↔Worker (bytes, direzione separata)
+		// Utile per capire quanti dati transitano nel layer P2P di inferenza
+		// =====================================================================
+		"istio_tcp_master_to_workers": fmt.Sprintf(
+			`sum(rate(istio_tcp_sent_bytes_total{source_app="%s_master"}[30s]))`, clusterID),
+		"istio_tcp_workers_to_master": fmt.Sprintf(
+			`sum(rate(istio_tcp_sent_bytes_total{source_app=~"%s_worker.*"}[30s]))`, clusterID),
+		"istio_tcp_recv_master": fmt.Sprintf(
+			`sum(rate(istio_tcp_received_bytes_total{destination_app="%s_master"}[30s]))`, clusterID),
+		"istio_tcp_recv_workers": fmt.Sprintf(
+			`sum(rate(istio_tcp_received_bytes_total{destination_app=~"%s_worker.*"}[30s]))`, clusterID),
+
+		// =====================================================================
+		// NETWORK-AWARE — RTT tra nodi (blackbox_exporter ICMP probe)
+		// Richiede blackbox_exporter con probe icmp configurato.
+		// I target sono gli IP dei nodi: master→worker e worker→master.
+		// Se non hai blackbox_exporter queste query restituiranno serie vuote.
+		// =====================================================================
+		// RTT medio master→worker (tutti i worker del cluster)
+		"rtt_master_to_workers": fmt.Sprintf(
+			`avg(probe_duration_seconds{job="blackbox-icmp", instance=~".*worker.*", source=~".*%s.*"}) * 1000`, clusterID),
+		// RTT per singolo worker (label instance = IP del worker)
+		"rtt_per_worker": fmt.Sprintf(
+			`probe_duration_seconds{job="blackbox-icmp", source=~".*%s.*"} * 1000`, clusterID),
+
+		// =====================================================================
+		// NETWORK-AWARE — Bandwidth e saturazione a livello nodo (node_exporter)
+		// Mostra la saturazione fisica della NIC su ogni nodo del cluster.
+		// =====================================================================
+		// Bandwidth TX/RX totale nodo master (identifica il nodo dal MasterNode label)
+		"node_net_tx_master": fmt.Sprintf(
+			`sum(rate(node_network_transmit_bytes_total{instance=~".*192\\.168\\.1\\.99.*", device!="lo"}[30s]))`, clusterID),
+		"node_net_rx_master": fmt.Sprintf(
+			`sum(rate(node_network_receive_bytes_total{instance=~".*192\\.168\\.1\\.99.*", device!="lo"}[30s]))`, clusterID),
+		// Packet loss a livello nodo (network-aware: indica congestione)
+		"node_net_tx_drop_master": fmt.Sprintf(
+			`sum(rate(node_network_transmit_drop_total{instance=~".*192\\.168\\.1\\.99.*", device!="lo"}[30s]))`, clusterID),
+		// Workers: drop e bandwidth aggregati
+		"node_net_tx_workers": `sum(rate(node_network_transmit_bytes_total{instance=~".*192\\.168\\.0\\.20[12].*", device!="lo"}[30s]))`,
+		"node_net_rx_workers": `sum(rate(node_network_receive_bytes_total{instance=~".*192\\.168\\.0\\.20[12].*", device!="lo"}[30s]))`,
+		"node_net_drop_workers": `sum(rate(node_network_transmit_drop_total{instance=~".*192\\.168\\.0\\.20[12].*", device!="lo"}[30s]))`,
+
+		// =====================================================================
+		// LOAD-AWARE — Pressione memoria e CPU steal a livello nodo
+		// =====================================================================
+		// Memoria disponibile reale su ogni nodo (load-aware scheduling)
+		"node_mem_available_master":  `node_memory_MemAvailable_bytes{instance=~".*192\\.168\\.1\\.99.*"}`,
+		"node_mem_available_worker1": `node_memory_MemAvailable_bytes{instance=~".*192\\.168\\.0\\.201.*"}`,
+		"node_mem_available_worker2": `node_memory_MemAvailable_bytes{instance=~".*192\\.168\\.0\\.202.*"}`,
+		// CPU steal % (contesa CPU virtualizzata — indica pressione sul nodo host)
+		"node_cpu_steal_master":   `avg(rate(node_cpu_seconds_total{mode="steal", instance=~".*192\\.168\\.1\\.99.*"}[30s])) * 100`,
+		"node_cpu_steal_worker1":  `avg(rate(node_cpu_seconds_total{mode="steal", instance=~".*192\\.168\\.0\\.201.*"}[30s])) * 100`,
+		"node_cpu_steal_worker2":  `avg(rate(node_cpu_seconds_total{mode="steal", instance=~".*192\\.168\\.0\\.202.*"}[30s])) * 100`,
+		// CPU usage % totale nodo
+		"node_cpu_usage_master":   `(1 - avg(rate(node_cpu_seconds_total{mode="idle", instance=~".*192\\.168\\.1\\.99.*"}[30s]))) * 100`,
+		"node_cpu_usage_worker1":  `(1 - avg(rate(node_cpu_seconds_total{mode="idle", instance=~".*192\\.168\\.0\\.201.*"}[30s]))) * 100`,
+		"node_cpu_usage_worker2":  `(1 - avg(rate(node_cpu_seconds_total{mode="idle", instance=~".*192\\.168\\.0\\.202.*"}[30s]))) * 100`,
+
+		// =====================================================================
+		// LOCALAI INFERENCE METRICS (se LocalAI espone /metrics)
+		// Queste metriche sono disponibili se --prometheus-port è abilitato
+		// in LocalAI (o se Prometheus scrapa il pod direttamente)
+		// =====================================================================
+		// Token generati al secondo (throughput inferenza)
+		"localai_tokens_per_sec": fmt.Sprintf(
+			`sum(rate(localai_tokens_generated_total{pod=~"local-ai-%s-.*"}[30s]))`, clusterID),
+		// Richieste in coda (profondità della queue di inferenza)
+		"localai_queue_depth": fmt.Sprintf(
+			`localai_inference_queue_depth{pod=~"local-ai-%s-.*"}`, clusterID),
+		// Tempo medio di inferenza (ms) per token
+		"localai_inference_duration_p50": fmt.Sprintf(
+			`histogram_quantile(0.50, rate(localai_inference_duration_milliseconds_bucket{pod=~"local-ai-%s-.*"}[30s]))`, clusterID),
+		"localai_inference_duration_p99": fmt.Sprintf(
+			`histogram_quantile(0.99, rate(localai_inference_duration_milliseconds_bucket{pod=~"local-ai-%s-.*"}[30s]))`, clusterID),
+
+		// =====================================================================
+		// CONTAINER DROPS — namespace-wide
+		// =====================================================================
+		"network_drops": `sum(rate(container_network_transmit_packets_dropped_total{namespace="local-ai"}[30s]))`,
+
+		// =====================================================================
+		// JETSON GPU (global)
+		// =====================================================================
+		"gpu_usage_jetson": `gpu_usage_percentage{instance="192.168.1.99:9401"}`,
+		"ram_free_jetson":  `ram_usage{instance="192.168.1.99:9401", statistic="free"}`,
+	}
+}
+
+// scrapePrometheus fetches time-series data from Prometheus for all metrics of a cluster.
+func scrapePrometheus(baseURL, clusterID string, start, end time.Time) map[string]interface{} {
+	result := map[string]interface{}{}
+	startTS := start.Unix()
+	endTS := end.Unix()
+
+	client := &http.Client{Timeout: 30 * time.Second}
+
+	for name, query := range metricQueries(clusterID) {
+		reqURL := fmt.Sprintf("%s/api/v1/query_range", baseURL)
+		req, err := http.NewRequest("GET", reqURL, nil)
+		if err != nil {
+			log.Printf("Prometheus %s request error: %v", name, err)
+			continue
+		}
+		q := req.URL.Query()
+		q.Set("query", query)
+		q.Set("start", fmt.Sprintf("%d", startTS))
+		q.Set("end", fmt.Sprintf("%d", endTS))
+		q.Set("step", "10s")
+		req.URL.RawQuery = q.Encode()
+
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Printf("Prometheus %s error: %v", name, err)
+			continue
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		var parsed struct {
+			Status string `json:"status"`
+			Data   struct {
+				Result []promResult `json:"result"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(body, &parsed); err != nil {
+			log.Printf("Prometheus %s parse error: %v", name, err)
+			continue
+		}
+		if parsed.Status == "success" && len(parsed.Data.Result) > 0 {
+			result[name] = parsed.Data.Result
+		}
+	}
+	return result
+}
+
+// ── Locust helpers ────────────────────────────────────────────────────────────
+
+// indentLines adds a prefix to every non-empty line of s.
+func indentLines(s, prefix string) string {
+	lines := strings.Split(s, "\n")
+	for i, l := range lines {
+		lines[i] = prefix + l
+	}
+	return strings.Join(lines, "\n")
+}
+
+// writeLocustSummaryCSV parses locust --only-summary stdout and writes a
+// _stats.csv compatible with parseLocustCSV.
+// Column order: Type,Name,ReqCount,FailCount,MedianRT,AvgRT,MinRT,MaxRT,AvgSize,RPS,FailRPS,50%,66%,75%,80%,90%,95%,98%,99%,99.9%,99.99%,100%
+func writeLocustSummaryCSV(path, logs, clusterID string) {
+	header := "Type,Name,Request Count,Failure Count,Median Response Time,Average Response Time," +
+		"Min Response Time,Max Response Time,Average Content Size,Requests/s,Failures/s," +
+		"50%,66%,75%,80%,90%,95%,98%,99%,99.9%,99.99%,100%\n"
+
+	rows := header
+	parsed := false
+
+	for _, line := range strings.Split(logs, "\n") {
+		line = strings.TrimSpace(line)
+		// Match the aggregated summary line from locust --only-summary output
+		// Format: POST  /v1/chat/... [cluster]   2   2(100%)  4173  3306  5039  3306  0.33  0.33
+		if !strings.Contains(line, "Aggregated") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 8 {
+			continue
+		}
+
+		// fields for "Aggregated" line:
+		// 0=Aggregated, 1=reqs, 2=fails(pct), 3=avg, 4=min, 5=max, 6=med, 7=rps, 8=failrps
+		reqs := fields[1]
+		// Strip parenthetical from fails: "2(100.00%)" -> "2"
+		fails := strings.Split(fields[2], "(")[0]
+		avg := fields[3]
+		minRT := fields[4]
+		maxRT := fields[5]
+		med := fields[6]
+		rps := fields[7]
+		failrps := "0"
+		if len(fields) > 8 {
+			failrps = fields[8]
+		}
+
+		// Percentiles come from the percentile table block
+		p50, p66, p75, p80, p90, p95, p98, p99, p999, p9999, p100 := med, med, med, med, med, med, med, med, med, med, maxRT
+
+		// Try to find the percentile row for Aggregated in the table below
+		inPercentileTable := false
+		for _, pline := range strings.Split(logs, "\n") {
+			pline = strings.TrimSpace(pline)
+			if strings.Contains(pline, "Response time percentiles") {
+				inPercentileTable = true
+				continue
+			}
+			if inPercentileTable && strings.Contains(pline, "Aggregated") {
+				pf := strings.Fields(pline)
+				// Format: Aggregated  50%  66%  75%  80%  90%  95%  98%  99%  99.9%  99.99%  100%  #reqs
+				if len(pf) >= 12 {
+					p50 = pf[1]
+					p66 = pf[2]
+					p75 = pf[3]
+					p80 = pf[4]
+					p90 = pf[5]
+					p95 = pf[6]
+					p98 = pf[7]
+					p99 = pf[8]
+					p999 = pf[9]
+					p9999 = pf[10]
+					p100 = pf[11]
+				}
+				break
+			}
+		}
+
+		rows += fmt.Sprintf("POST,Aggregated,%s,%s,%s,%s,%s,%s,0,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
+			reqs, fails, med, avg, minRT, maxRT, rps, failrps,
+			p50, p66, p75, p80, p90, p95, p98, p99, p999, p9999, p100)
+		parsed = true
+		break
+	}
+
+	if !parsed {
+		// Write empty but valid CSV so parseLocustCSV doesn't panic
+		rows += "POST,Aggregated,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0\n"
+	}
+
+	os.WriteFile(path, []byte(rows), 0644)
+}

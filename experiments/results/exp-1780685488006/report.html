@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Experiment Report — prova istio</title>
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117; --surface: #1a1d27; --border: #2a2d3a;
+    --text: #e2e8f0; --muted: #94a3b8; --accent: #6366f1;
+    --green: #22c55e; --red: #ef4444; --amber: #f59e0b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 1.5rem 2rem; }
+  header h1 { font-size: 1.5rem; color: var(--accent); }
+  header p { color: var(--muted); font-size: .875rem; margin-top: .25rem; }
+  nav { display: flex; gap: .5rem; padding: 1rem 2rem; background: var(--surface);
+        border-bottom: 1px solid var(--border); overflow-x: auto; }
+  nav button { background: var(--border); border: none; color: var(--text); padding: .5rem 1rem;
+               border-radius: 6px; cursor: pointer; white-space: nowrap; font-size: .875rem; }
+  nav button.active { background: var(--accent); }
+  main { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+  .section { display: none; }
+  .section.active { display: block; }
+  h2 { font-size: 1.25rem; margin-bottom: 1.5rem; color: var(--text); padding-bottom: .5rem;
+       border-bottom: 1px solid var(--border); }
+  h3 { font-size: 1rem; color: var(--muted); margin: 1.5rem 0 .75rem; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap: 1rem; margin-bottom: 2rem; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+         padding: 1rem; text-align: center; }
+  .kpi .val { font-size: 1.75rem; font-weight: 700; color: var(--accent); }
+  .kpi .lbl { font-size: .75rem; color: var(--muted); margin-top: .25rem; }
+  .kpi.warn .val { color: var(--red); }
+  .kpi.ok .val { color: var(--green); }
+  .charts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(600px,1fr)); gap: 1.5rem; }
+  .chart-box { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+               padding: 1rem; }
+  .chart-box .chart-title { font-size: .875rem; color: var(--muted); margin-bottom: .5rem; }
+  .cluster-tabs { display: flex; gap: .5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .cluster-tab { background: var(--border); border: none; color: var(--text); padding: .4rem .9rem;
+                 border-radius: 6px; cursor: pointer; font-size: .875rem; }
+  .cluster-tab.active { background: var(--accent); }
+  .cluster-panel { display: none; }
+  .cluster-panel.active { display: block; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📊 Experiment Report — prova istio</h1>
+  <p>2026-06-05 18:51:28 → 2026-06-05 18:53:46 &nbsp;|&nbsp; Clusters: cluster-4</p>
+</header>
+<nav>
+  <button class="active" onclick="showSection('comparison')">🔀 Comparison</button>
+  <button onclick="showSection('clusters')">📦 Per Cluster</button>
+  <button onclick="showSection('istio')">🌐 Istio / TCP P2P</button>
+  <button onclick="showSection('infra')">🖥️ Container Resources</button>
+  <button onclick="showSection('node')">⚙️ Node Metrics</button>
+  <button onclick="showSection('inference')">🧠 Inference</button>
+</nav>
+<main>
+
+<!-- ═══════════════════ COMPARISON ═══════════════════ -->
+<div id="comparison" class="section active">
+  <h2>Cross-Cluster Comparison</h2>
+  <div class="charts-grid">
+    <div class="chart-box"><div class="chart-title">Average Response Time (ms)</div><div id="cmp_avg_rt" style="height:300px"></div></div>
+    <div class="chart-box"><div class="chart-title">P95 Latency (ms)</div><div id="cmp_p95" style="height:300px"></div></div>
+    <div class="chart-box"><div class="chart-title">P99 Latency (ms)</div><div id="cmp_p99" style="height:300px"></div></div>
+    <div class="chart-box"><div class="chart-title">Throughput (req/s)</div><div id="cmp_rps" style="height:300px"></div></div>
+    <div class="chart-box"><div class="chart-title">Error Rate (%)</div><div id="cmp_err" style="height:300px"></div></div>
+    <div class="chart-box"><div class="chart-title">Peak RAM Master (MB)</div><div id="cmp_ram" style="height:300px"></div></div>
+    <div class="chart-box"><div class="chart-title">Peak CPU Master (cores)</div><div id="cmp_cpu" style="height:300px"></div></div>
+  </div>
+</div>
+
+<!-- ═══════════════════ PER CLUSTER ═══════════════════ -->
+<div id="clusters" class="section">
+  <h2>Per-Cluster Detail</h2>
+  <div class="cluster-tabs" id="clusterTabs"></div>
+  <div id="clusterPanels"></div>
+</div>
+
+<!-- ═══════════════════ ISTIO ═══════════════════ -->
+<div id="istio" class="section">
+  <h2>Istio / Network Traffic</h2>
+  <div class="cluster-tabs" id="istioTabs"></div>
+  <div id="istioPanels"></div>
+</div>
+
+<!-- ═══════════════════ INFRA ═══════════════════ -->
+<div id="infra" class="section">
+  <h2>Infrastructure — Container Resources</h2>
+  <div class="cluster-tabs" id="infraTabs"></div>
+  <div id="infraPanels"></div>
+</div>
+
+<!-- ═══════════════════ NODE ═══════════════════ -->
+<div id="node" class="section">
+  <h2>Node-Level Metrics (Load-Aware + Network-Aware)</h2>
+  <div class="cluster-tabs" id="nodeTabs"></div>
+  <div id="nodePanels"></div>
+</div>
+
+<!-- ═══════════════════ INFERENCE ═══════════════════ -->
+<div id="inference" class="section">
+  <h2>LocalAI Inference Metrics</h2>
+  <div class="cluster-tabs" id="inferenceTabs"></div>
+  <div id="inferencePanels"></div>
+</div>
+
+</main>
+<script>
+const CHARTS = {"perCluster":{"cluster-4":{"clusterId":"cluster-4","model":"qwen_qwen3.5-0.8b","latency":{"x":null,"y":null,"name":""},"rps":{"x":null,"y":null,"name":""},"users":{"x":null,"y":null,"name":""},"ram":{"x":null,"y":null,"name":"RAM Master (MB)","series":[{"name":"RAM Master (MB)","x":[1780685488000,1780685498000,1780685508000,1780685518000,1780685528000,1780685538000,1780685548000,1780685558000,1780685568000,1780685578000,1780685588000,1780685598000,1780685608000,1780685618000],"y":[2425.7890625,2427.17578125,2427.17578125,3500.34765625,3863.671875,3968.421875,3988.921875,4042.59375,4042.59375,4053.03515625,4068.72265625,3999.3359375,3999.3359375,4097.859375]},{"name":"RAM Workers (MB)","x":[1780685488000,1780685498000,1780685508000,1780685518000,1780685528000,1780685538000,1780685548000,1780685558000,1780685568000,1780685578000,1780685588000,1780685598000,1780685608000,1780685618000],"y":[448.33203125,441.64453125,442.4453125,1569.6875,2169.140625,2172.98046875,2169.453125,2160.703125,2158.8125,2160.1484375,2161.25,2162.1796875,2162.8828125,2165.90625]}]},"cpu":{"x":null,"y":null,"name":"CPU Master (cores)","series":[{"name":"CPU Master (cores)","x":[1780685488000,1780685498000,1780685518000,1780685528000,1780685538000,1780685548000,1780685558000,1780685568000,1780685578000,1780685588000,1780685598000,1780685608000,1780685618000],"y":[0.19907556584473785,0.3023269315863586,2.883687846129396,0.9060422075203084,1.6009307027646345,1.9828388121707081,1.976229937630797,1.9758759493044389,0.5170684709273782,0.16910898389933804,0.3443908121705908,0.16191850950158637,0.30902674013797793]},{"name":"CPU Workers (cores)","x":[1780685488000,1780685498000,1780685508000,1780685518000,1780685528000,1780685538000,1780685548000,1780685558000,1780685568000,1780685578000,1780685588000,1780685598000,1780685608000,1780685618000],"y":[0.05762838885044968,0.039616761381220264,0.07280374270266958,0.33553459904473615,0.2299836683627908,0.034964358307445015,0.06646166692327068,0.06522469987301847,0.3807359093933893,1.0657797886672766,1.4749243910205843,1.539915180062783,1.5470658473393355,0.8100947251309548]}]},"netTx":{"x":null,"y":null,"name":"TX Master (KB/s)","series":[{"name":"TX Master (KB/s)","x":[1780685498000,1780685518000,1780685538000,1780685548000,1780685558000,1780685568000,1780685578000,1780685588000,1780685598000,1780685608000,1780685618000],"y":[90.87328876663254,21139.559327775954,4636.0969166380055,40.544297228811736,40.544297228811736,168.3018266891325,1129.5096258918818,1129.5096258918816,943.3123322330238,608.1336882645624,681.2190285714772]},{"name":"TX Workers (KB/s)","x":[1780685488000,1780685498000,1780685508000,1780685518000,1780685528000,1780685538000,1780685548000,1780685558000,1780685568000,1780685578000,1780685588000,1780685598000,1780685608000,1780685618000],"y":[93.80994350386263,118.54582083882421,110.29742960667393,398.4541163486458,586.8457982744997,50.257835580496064,24.57430922659888,106.36910667386523,159.55880111357985,270.9924468648136,464.41402823878053,807.8674398991194,507.4262472882515,780.6771728778405]}]},"netRx":{"x":null,"y":null,"name":"RX Master (KB/s)","series":[{"name":"RX Master (KB/s)","x":[1780685498000,1780685518000,1780685538000,1780685548000,1780685558000,1780685568000,1780685578000,1780685588000,1780685598000,1780685608000,1780685618000],"y":[2188.1806424406077,256.93777718462553,585.9486956874808,181.78383451045937,181.78383451045937,4797.336544444599,918.7202706177286,918.7202706177283,717.5771047954149,1007.6916825822799,1128.795793351315]},{"name":"RX Workers (KB/s)","x":[1780685488000,1780685498000,1780685508000,1780685518000,1780685528000,1780685538000,1780685548000,1780685558000,1780685568000,1780685578000,1780685588000,1780685598000,1780685608000,1780685618000],"y":[3761.6630706031156,4256.325705855907,14497.533065923177,20450.171767346113,20909.78531849519,46.104052549016124,35.45194157583271,150.17426870633352,285.1653455452727,2722.508095913816,1818.0914658045706,2409.3924658073047,709.7495423108307,5394.935551538906]}]},"istioReq":{"x":[1780685488000,1780685498000,1780685508000,1780685518000,1780685528000,1780685538000,1780685548000,1780685558000],"y":[0,0,0,0,0,0,0,0],"name":"Istio req/s"},"istioP50":{"x":null,"y":null,"name":"Istio P50 (ms)"},"istioP95":{"x":null,"y":null,"name":"Istio P95 (ms)"},"istioP99":{"x":null,"y":null,"name":"Istio P99 (ms)"},"tcpMasterToWorkers":{"x":null,"y":null,"name":"TCP Master→Workers (KB/s)"},"tcpWorkersToMaster":{"x":null,"y":null,"name":"TCP Workers→Master (KB/s)"},"nodeNetTx":{"x":null,"y":null,"name":"Node TX Master (MB/s)","series":[{"name":"Node TX Master (MB/s)","x":[1780685488000,1780685498000,1780685508000,1780685518000,1780685528000,1780685538000,1780685548000,1780685558000,1780685568000,1780685578000,1780685588000,1780685598000,1780685608000,1780685618000],"y":[0.0806937339952257,0.10666639658610026,11.424449406851231,19.2637495803833,11.347942695617675,0.03449935913085938,0.05496045569554171,0.26639977311428853,0.5286335240742709,1.074607251829827,1.2277422144390455,0.8697107033030191,0.9573659602483113,0.900385059662282]},{"name":"Node TX Workers (MB/s)","x":[1780685488000,1780685498000,1780685508000,1780685518000,1780685528000,1780685538000,1780685548000,1780685558000,1780685568000,1780685578000,1780685588000,1780685598000,1780685608000,1780685618000],"y":[0.15121893879360623,0.12952734637360375,0.1063344543240865,0.38020713806152345,0.36265869140625,0.3050680160522461,0.06982063293457032,0.08760238647460938,0.20521827697753905,0.2994650645492735,0.6196544839834635,0.596417276124761,0.7225221736185675,0.5629251952983955]}]},"nodeNetRx":{"x":null,"y":null,"name":"Node RX Master (MB/s)","series":[{"name":"Node RX Master (MB/s)","x":[1780685488000,1780685498000,1780685508000,1780685518000,1780685528000,1780685538000,1780685548000,1780685558000,1780685568000,1780685578000,1780685588000,1780685598000,1780685608000,1780685618000],"y":[1.6948961635335287,1.0784806313069661,0.2269028187243243,0.5325005722045899,0.5100543212890625,0.4272533416748047,0.25472648238845835,3.4230168112313684,3.461339752130467,1.0783754906653766,0.9605815081431855,0.6221369106801351,1.121262115948995,0.7963369777750956]},{"name":"Node RX Workers (MB/s)","x":[1780685488000,1780685498000,1780685508000,1780685518000,1780685528000,1780685538000,1780685548000,1780685558000,1780685568000,1780685578000,1780685588000,1780685598000,1780685608000,1780685618000],"y":[3.586696349574195,3.5419260610886587,7.960838368267059,19.235775985717773,16.8091402053833,2.990529556274414,0.09097270965576172,0.1330247116088867,0.400166130065918,2.5989833361987786,3.035520992834847,2.8124925224184985,3.017178154091947,3.0313463202500674]}]},"nodeNetDrop":{"x":null,"y":null,"name":"Drop Master (pkt/s)","series":[{"name":"Drop Master (pkt/s)","x":[1780685488000,1780685498000,1780685508000,1780685518000,1780685528000,1780685538000,1780685548000,1780685558000,1780685568000,1780685578000,1780685588000,1780685598000,1780685608000,1780685618000],"y":[0.12,0,0,0,0,0.12,0.15999360025598977,0.720028801152046,1.36,1,0.2800112004480179,0.12,0.12,0]},{"name":"Drop Workers (pkt/s)","x":[1780685488000,1780685498000,1780685508000,1780685518000,1780685528000,1780685538000,1780685548000,1780685558000,1780685568000,1780685578000,1780685588000,1780685598000,1780685608000,1780685618000],"y":[0.16,0,0.16,0.16,0.16,0.16,0.16,0,0.16,0.15999360025598977,0.16,0.16,0.15999360025598977,0]}]},"nodeCpu":{"x":null,"y":null,"name":"Node CPU %","series":[{"name":"Master CPU %","x":[1780685488000,1780685498000,1780685508000,1780685518000,1780685528000,1780685538000,1780685548000,1780685558000,1780685568000,1780685578000,1780685588000,1780685598000,1780685608000,1780685618000],"y":[19.07499999999709,21.939999999973224,21.763129474859422,22.735000000000582,17.01000000002386,15.919999999998247,16.52333906647051,20.83183327333734,20.68000000003667,14.535000000003484,8.52134085361378,7.564999999987776,7.554999999993006,8.129999999990101]},{"name":"Worker-01 CPU %","x":[1780685488000,1780685498000,1780685508000,1780685518000,1780685528000,1780685538000,1780685548000,1780685558000,1780685568000,1780685578000,1780685588000,1780685598000,1780685608000,1780685618000],"y":[18.41000000000349,19.44000000000232,10.880000000004653,5.3899999999848625,3.6400000000139654,2.169999999954597,1.209999999991851,1.6700000000419046,5.179999999963913,8.573657053724826,11.020000000018626,10.640000000013972,15.58337666489149,17.839999999996504]},{"name":"Worker-02 CPU %","x":[1780685488000,1780685498000,1780685508000,1780685518000,1780685528000,1780685538000,1780685548000,1780685558000,1780685568000,1780685578000,1780685588000,1780685598000,1780685608000,1780685618000],"y":[14.580000000016291,14.123435062592836,3.769999999989515,3.4000000000232844,3.3000000000174556,2.9500000000116433,1.1700000000419042,1.629999999975551,4.680000000022111,10.843566257375304,15.746629865194617,14.843406263716851,14.820000000006983,16.18664746587186]}]},"nodeMem":{"x":null,"y":null,"name":"Node RAM Available (GB)","series":[{"name":"Master RAM avail (GB)","x":[1780685488000,1780685498000,1780685508000,1780685518000,1780685528000,1780685538000,1780685548000,1780685558000,1780685568000,1780685578000,1780685588000,1780685598000,1780685608000,1780685618000],"y":[53.020355224609375,52.85592269897461,52.56544876098633,51.983642578125,51.961097717285156,51.94490051269531,51.912174224853516,51.8020133972168,51.83942413330078,51.8245849609375,51.85707473754883,51.897300720214844,51.85020065307617,51.94112014770508]},{"name":"Worker-01 RAM avail (GB)","x":[1780685488000,1780685498000,1780685508000,1780685518000,1780685528000,1780685538000,1780685548000,1780685558000,1780685568000,1780685578000,1780685588000,1780685598000,1780685608000,1780685618000],"y":[6.941699981689453,6.95831298828125,6.956016540527344,6.712940216064453,6.702274322509766,6.698677062988281,6.7010650634765625,6.696323394775391,6.692615509033203,6.709907531738281,6.717800140380859,6.706306457519531,6.681667327880859,6.685047149658203]},{"name":"Worker-02 RAM avail (GB)","x":[1780685488000,1780685498000,1780685508000,1780685518000,1780685528000,1780685538000,1780685548000,1780685558000,1780685568000,1780685578000,1780685588000,1780685598000,1780685608000,1780685618000],"y":[7.038799285888672,7.038623809814453,7.026988983154297,6.4775238037109375,6.4693756103515625,6.465538024902344,6.467098236083984,6.469310760498047,6.4695281982421875,6.468708038330078,6.451622009277344,6.440605163574219,6.430789947509766,6.423713684082031]}]},"inferenceTokensPerSec":{"x":null,"y":null,"name":"Tokens/s"},"inferenceQueueDepth":{"x":null,"y":null,"name":"Queue depth"},"inferenceLatP50":{"x":null,"y":null,"name":"Inference P50 (ms)"},"inferenceLatP99":{"x":null,"y":null,"name":"Inference P99 (ms)"},"summary":{"total":0,"failed":0,"avgRt":0,"p50":0,"p95":0,"p99":0,"rps":0}}},"comparison":{"avgLatency":[{"label":"cluster-4 (qwen_qwen3.5-0.8b)","value":0}],"p95Latency":[{"label":"cluster-4 (qwen_qwen3.5-0.8b)","value":0}],"p99Latency":[{"label":"cluster-4 (qwen_qwen3.5-0.8b)","value":0}],"rps":[{"label":"cluster-4 (qwen_qwen3.5-0.8b)","value":0}],"errorRate":[{"label":"cluster-4 (qwen_qwen3.5-0.8b)","value":0}],"peakRam":[{"label":"cluster-4 (qwen_qwen3.5-0.8b)","value":4097.859375}],"peakCpu":[{"label":"cluster-4 (qwen_qwen3.5-0.8b)","value":2.883687846129396}]}};
+const CLUSTER_IDS = ["cluster-4"];
+
+const LAYOUT_BASE = {
+  paper_bgcolor: 'rgba(0,0,0,0)',
+  plot_bgcolor: 'rgba(0,0,0,0)',
+  font: { color: '#e2e8f0', size: 11 },
+  xaxis: { gridcolor: '#2a2d3a', linecolor: '#2a2d3a' },
+  yaxis: { gridcolor: '#2a2d3a', linecolor: '#2a2d3a' },
+  legend: { bgcolor: 'rgba(0,0,0,0)' },
+  margin: { t: 20, b: 40, l: 50, r: 10 },
+};
+const COLORS = ['#6366f1','#22c55e','#f59e0b','#ef4444','#06b6d4','#a78bfa','#fb923c'];
+
+function plotBar(divId, items, unit) {
+  if (!items || !items.length) return;
+  const trace = {
+    type: 'bar',
+    x: items.map(i => i.label),
+    y: items.map(i => i.value),
+    marker: { color: COLORS },
+    text: items.map(i => i.value.toFixed(2) + ' ' + (unit||'')),
+    textposition: 'auto',
+  };
+  Plotly.newPlot(divId, [trace], {...LAYOUT_BASE}, {responsive:true, displayModeBar:false});
+}
+
+function plotLine(divId, pd, unit) {
+  if (!pd) return;
+  const traces = [];
+  const toDates = arr => (arr||[]).map(v => new Date(v));
+  if (pd.series && pd.series.length) {
+    pd.series.forEach((s,i) => {
+      if (!s.x || !s.x.length) return;
+      traces.push({type:'scatter', mode:'lines', name: s.name, x: toDates(s.x), y: s.y, line:{color: COLORS[i % COLORS.length]}});
+    });
+  } else if (pd.x && pd.x.length) {
+    traces.push({type:'scatter', mode:'lines', name: pd.name, x: toDates(pd.x), y: pd.y, line:{color: COLORS[0]}});
+  }
+  if (!traces.length) { document.getElementById(divId).innerHTML = '<p style="color:#94a3b8;padding:1rem">No data</p>'; return; }
+  const layout = {...LAYOUT_BASE,
+    xaxis: {...LAYOUT_BASE.xaxis, type: 'date', tickformat: '%H:%M:%S'},
+    yaxis: {...LAYOUT_BASE.yaxis, title: unit||''}};
+  Plotly.newPlot(divId, traces, layout, {responsive:true, displayModeBar:false});
+}
+
+function buildClusterPanel(cid, container, mode) {
+  const cc = CHARTS.perCluster[cid];
+  if (!cc) return;
+  const s = cc.summary;
+  const errRate = s.total > 0 ? (s.failed/s.total*100).toFixed(1) : '0.0';
+  const warnErr = parseFloat(errRate) > 5 ? 'warn' : 'ok';
+
+  let html = '<div class="summary-grid">' +
+    kpi(s.total, 'Total Requests') +
+    kpi(s.rps.toFixed(2), 'Req/s') +
+    kpi(s.avgRt.toFixed(0), 'Avg RT (ms)') +
+    kpi(s.p50.toFixed(0), 'P50 (ms)') +
+    kpi(s.p95.toFixed(0), 'P95 (ms)') +
+    kpi(s.p99.toFixed(0), 'P99 (ms)') +
+    kpiClass(errRate + '%', 'Error Rate', warnErr) +
+    '</div>';
+
+  const p = (mode + '_' + cid).replace(/-/g,'_');
+
+  if (mode === 'locust') {
+    const hasHistory = (cc.latency && cc.latency.series && cc.latency.series.length) ||
+                       (cc.rps && cc.rps.x && cc.rps.x.length);
+    if (hasHistory) {
+      html += '<div class="charts-grid">' +
+        chartBox(p+'_lat', 'Latency over time (Locust)') +
+        chartBox(p+'_rps', 'Throughput (req/s)') +
+        chartBox(p+'_users', 'Concurrent Users') +
+        '</div>';
+      container.innerHTML += html;
+      plotLine(p+'_lat', cc.latency, 'ms');
+      plotLine(p+'_rps', cc.rps, 'req/s');
+      plotLine(p+'_users', cc.users, 'users');
+    } else {
+      // No locust history (--only-summary): show Istio request rate + latency over time instead
+      html += '<div class="charts-grid">' +
+        chartBox(p+'_ireq', 'Request rate over time (Istio req/s)') +
+        chartBox(p+'_ip50', 'Latency P50 over time (Istio, ms)') +
+        chartBox(p+'_ip95', 'Latency P95 over time (Istio, ms)') +
+        '</div>';
+      container.innerHTML += html;
+      plotLine(p+'_ireq', cc.istioReq, 'req/s');
+      plotLine(p+'_ip50', cc.istioP50, 'ms');
+      plotLine(p+'_ip95', cc.istioP95, 'ms');
+    }
+
+  } else if (mode === 'istio') {
+    html += '<div class="charts-grid">' +
+      chartBox(p+'_req', 'Istio Req/s (Gateway→Master)') +
+      chartBox(p+'_p50', 'Istio P50 Latency (ms)') +
+      chartBox(p+'_p95', 'Istio P95 Latency (ms)') +
+      chartBox(p+'_p99', 'Istio P99 Latency (ms)') +
+      chartBox(p+'_tcpm2w', 'TCP P2P Master→Workers (KB/s)') +
+      chartBox(p+'_tcpw2m', 'TCP P2P Workers→Master (KB/s)') +
+      '</div>';
+    container.innerHTML += html;
+    plotLine(p+'_req', cc.istioReq, 'req/s');
+    plotLine(p+'_p50', cc.istioP50, 'ms');
+    plotLine(p+'_p95', cc.istioP95, 'ms');
+    plotLine(p+'_p99', cc.istioP99, 'ms');
+    plotLine(p+'_tcpm2w', cc.tcpMasterToWorkers, 'KB/s');
+    plotLine(p+'_tcpw2m', cc.tcpWorkersToMaster, 'KB/s');
+
+  } else if (mode === 'infra') {
+    html += '<div class="charts-grid">' +
+      chartBox(p+'_ram', 'Container RAM (MB)') +
+      chartBox(p+'_cpu', 'Container CPU (cores)') +
+      chartBox(p+'_tx', 'Container Network TX (KB/s)') +
+      chartBox(p+'_rx', 'Container Network RX (KB/s)') +
+      '</div>';
+    container.innerHTML += html;
+    plotLine(p+'_ram', cc.ram, 'MB');
+    plotLine(p+'_cpu', cc.cpu, 'cores');
+    plotLine(p+'_tx', cc.netTx, 'KB/s');
+    plotLine(p+'_rx', cc.netRx, 'KB/s');
+
+  } else if (mode === 'node') {
+    html += '<div class="charts-grid">' +
+      chartBox(p+'_cpu', 'Node CPU % per nodo') +
+      chartBox(p+'_mem', 'Node RAM disponibile (GB)') +
+      chartBox(p+'_ntx', 'Node NIC TX (MB/s)') +
+      chartBox(p+'_nrx', 'Node NIC RX (MB/s)') +
+      chartBox(p+'_drop', 'Node Packet Drop (pkt/s)') +
+      '</div>';
+    container.innerHTML += html;
+    plotLine(p+'_cpu', cc.nodeCpu, '%');
+    plotLine(p+'_mem', cc.nodeMem, 'GB');
+    plotLine(p+'_ntx', cc.nodeNetTx, 'MB/s');
+    plotLine(p+'_nrx', cc.nodeNetRx, 'MB/s');
+    plotLine(p+'_drop', cc.nodeNetDrop, 'pkt/s');
+
+  } else if (mode === 'inference') {
+    html += '<div class="charts-grid">' +
+      chartBox(p+'_tok', 'Tokens/s generati') +
+      chartBox(p+'_q', 'Queue depth inferenza') +
+      chartBox(p+'_ip50', 'Inference P50 (ms/token)') +
+      chartBox(p+'_ip99', 'Inference P99 (ms/token)') +
+      '</div>';
+    container.innerHTML += html;
+    plotLine(p+'_tok', cc.inferenceTokensPerSec, 'tok/s');
+    plotLine(p+'_q', cc.inferenceQueueDepth, '');
+    plotLine(p+'_ip50', cc.inferenceLatP50, 'ms');
+    plotLine(p+'_ip99', cc.inferenceLatP99, 'ms');
+  }
+}
+
+function kpi(val, lbl) { return '<div class="kpi"><div class="val">'+val+'</div><div class="lbl">'+lbl+'</div></div>'; }
+function kpiClass(val, lbl, cls) { return '<div class="kpi '+cls+'"><div class="val">'+val+'</div><div class="lbl">'+lbl+'</div></div>'; }
+function chartBox(id, title) { return '<div class="chart-box"><div class="chart-title">'+title+'</div><div id="'+id+'" style="height:280px"></div></div>'; }
+
+function buildTabPanels(tabContainerId, panelContainerId, mode) {
+  const tabs = document.getElementById(tabContainerId);
+  const panels = document.getElementById(panelContainerId);
+  CLUSTER_IDS.forEach((cid, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'cluster-tab' + (i===0?' active':'');
+    btn.textContent = cid + ' (' + (CHARTS.perCluster[cid]||{model:''}).model + ')';
+    btn.onclick = () => {
+      tabs.querySelectorAll('.cluster-tab').forEach(b=>b.classList.remove('active'));
+      panels.querySelectorAll('.cluster-panel').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(panelContainerId+'_'+cid).classList.add('active');
+    };
+    tabs.appendChild(btn);
+
+    const panel = document.createElement('div');
+    panel.id = panelContainerId + '_' + cid;
+    panel.className = 'cluster-panel' + (i===0?' active':'');
+    panels.appendChild(panel);
+    buildClusterPanel(cid, panel, mode);
+  });
+}
+
+// Init
+plotBar('cmp_avg_rt', CHARTS.comparison.avgLatency, 'ms');
+plotBar('cmp_p95', CHARTS.comparison.p95Latency, 'ms');
+plotBar('cmp_p99', CHARTS.comparison.p99Latency, 'ms');
+plotBar('cmp_rps', CHARTS.comparison.rps, 'req/s');
+plotBar('cmp_err', CHARTS.comparison.errorRate, '%');
+plotBar('cmp_ram', CHARTS.comparison.peakRam, 'MB');
+plotBar('cmp_cpu', CHARTS.comparison.peakCpu, 'cores');
+
+buildTabPanels('clusterTabs','clusterPanels', 'locust');
+buildTabPanels('istioTabs','istioPanels', 'istio');
+buildTabPanels('infraTabs','infraPanels', 'infra');
+buildTabPanels('nodeTabs','nodePanels', 'node');
+buildTabPanels('inferenceTabs','inferencePanels', 'inference');
+
+function showSection(id) {
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  const sections = ['comparison','clusters','istio','infra','node','inference'];
+  document.querySelectorAll('nav button').forEach((b,i)=>{
+    b.classList.toggle('active', sections[i]===id);
+  });
+}
+</script>
+</body>
+</html>

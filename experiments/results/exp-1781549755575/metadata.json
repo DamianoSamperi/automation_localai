@@ -1,0 +1,35 @@
+{
+  "id": "exp-1781549755575",
+  "name": "orin only master, model large",
+  "startedAt": "2026-06-15T20:55:55.575800484+02:00",
+  "finishedAt": "2026-06-15T21:16:43.899701632+02:00",
+  "status": "done",
+  "clusters": [
+    {
+      "clusterId": "cluster-7",
+      "gatewayHost": "192.168.1.99",
+      "gatewayPort": 30764,
+      "model": "qwen3.5-27b",
+      "profileCsv": ""
+    }
+  ],
+  "reportFile": "experiments/results/exp-1781549755575/report.html",
+  "logs": [
+    "[20:55:55] Generating locustfiles...",
+    "[20:55:55] [cluster-7] profile: 3 lines",
+    "[20:55:55] Locustfile ready for cluster-7 → 192.168.1.99:30764 model=qwen3.5-27b",
+    "[20:55:55] Starting parallel load tests (inside cluster)...",
+    "[20:55:55] [cluster-7] locust → http://local-ai-cluster-7.local-ai.svc.cluster.local:8080 (ClusterIP, Istio sidecar active)",
+    "[20:55:55] [cluster-7] Locustfile encoded (2692 bytes → 3592 b64 chars)",
+    "[20:55:55] [cluster-7] Job locust-cluster-7-1781549755 created",
+    "[20:55:59] [cluster-7] Pod ready: locust-cluster-7-1781549755-z9df2",
+    "[20:55:59] [cluster-7] Log stream ended (OK=0 FAIL=0)",
+    "[21:16:12] [cluster-7] ✅ locust job done",
+    "[21:16:12] Waiting 30s for Prometheus data flush...",
+    "[21:16:42] Fetching metrics from Prometheus...",
+    "[21:16:42] Scraping metrics for cluster-7...",
+    "[21:16:43] Generating HTML report...",
+    "[21:16:43] Report ready: experiments/results/exp-1781549755575/report.html",
+    "[21:16:43] Experiment complete."
+  ]
+}

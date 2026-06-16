@@ -1,0 +1,65 @@
+---
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: worker01-to-worker02-latency
+  namespace: chaos-mesh
+spec:
+  action: delay
+  mode: all
+  # Source: pod worker su ds-cluster-01-worker-01
+  selector:
+    namespaces:
+      - local-ai
+    labelSelectors:
+      role: worker
+    nodeSelectors:
+      kubernetes.io/hostname: ds-cluster-01-worker-01
+  delay:
+    latency: "50ms"
+    jitter: "10ms"
+    correlation: "50"
+  # Direction: solo traffico in uscita dal worker-01
+  direction: to
+  target:
+    mode: all
+    selector:
+      namespaces:
+        - local-ai
+      labelSelectors:
+        role: worker
+      nodeSelectors:
+        kubernetes.io/hostname: ds-cluster-01-worker-02
+  duration: "200m"
+---
+# Speculare: dal worker-02 verso worker-01 (latenza simmetrica)
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: worker02-to-worker01-latency
+  namespace: chaos-mesh
+spec:
+  action: delay
+  mode: all
+  selector:
+    namespaces:
+      - local-ai
+    labelSelectors:
+      role: worker
+    nodeSelectors:
+      kubernetes.io/hostname: ds-cluster-01-worker-02
+  delay:
+    latency: "50ms"
+    jitter: "10ms"
+    correlation: "50"
+  direction: to
+  target:
+    mode: all
+    selector:
+      namespaces:
+        - local-ai
+      labelSelectors:
+        role: worker
+      nodeSelectors:
+        kubernetes.io/hostname: ds-cluster-01-worker-01
+  duration: "200m"

@@ -1,0 +1,15 @@
+{
+  "id": "exp-1781087071582",
+  "name": "prova utilizzo entrambi worker",
+  "startedAt": "2026-06-10T12:24:31.582282279+02:00",
+  "status": "running",
+  "clusters": [
+    {
+      "clusterId": "cluster-7",
+      "gatewayHost": "192.168.1.99",
+      "gatewayPort": 30125,
+      "model": "qwen_qwen3.5-2b",
+      "profileCsv": ""
+    }
+  ]
+}

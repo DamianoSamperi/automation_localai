@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LocalAI Orchestrator</title>
+<style>
+:root {
+  --bg: #0f1117; --surface: #1a1d27; --surface2: #21253a;
+  --border: #2a2d3a; --text: #e2e8f0; --muted: #94a3b8;
+  --accent: #6366f1; --accent2: #818cf8;
+  --green: #22c55e; --red: #ef4444; --amber: #f59e0b; --blue: #3b82f6;
+  --radius: 10px; --sidebar: 240px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; display: flex; height: 100vh; overflow: hidden; }
+
+/* Sidebar */
+aside { width: var(--sidebar); background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+.logo { padding: 1.5rem 1rem; border-bottom: 1px solid var(--border); }
+.logo h1 { font-size: 1rem; font-weight: 700; color: var(--accent); }
+.logo small { color: var(--muted); font-size: .75rem; }
+nav a { display: flex; align-items: center; gap: .625rem; padding: .75rem 1rem; cursor: pointer;
+         color: var(--muted); font-size: .875rem; text-decoration: none; border-left: 3px solid transparent; }
+nav a.active, nav a:hover { color: var(--text); background: var(--surface2); border-left-color: var(--accent); }
+nav a span { font-size: 1.1rem; }
+
+/* Main */
+main { flex: 1; overflow-y: auto; }
+.page { display: none; padding: 2rem; }
+.page.active { display: block; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+.page-header h2 { font-size: 1.25rem; }
+
+/* Cards */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1rem; }
+.card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: .75rem; }
+.card-title { font-size: .9rem; font-weight: 600; }
+.cluster-meta { color: var(--muted); font-size: .8rem; margin-top: .25rem; }
+
+/* Buttons */
+.btn { border: none; cursor: pointer; padding: .45rem .9rem; border-radius: 6px; font-size: .8rem;
+        font-weight: 500; display: inline-flex; align-items: center; gap: .4rem; transition: opacity .15s; }
+.btn:hover { opacity: .85; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-success { background: var(--green); color: #fff; }
+.btn-danger  { background: var(--red);   color: #fff; }
+.btn-amber   { background: var(--amber); color: #000; }
+.btn-ghost   { background: var(--border); color: var(--text); }
+.btn-sm { padding: .3rem .65rem; font-size: .75rem; }
+
+/* Status badges */
+.badge { display: inline-block; padding: .2rem .55rem; border-radius: 999px; font-size: .7rem; font-weight: 600; }
+.badge-running    { background: rgba(34,197,94,.15);  color: var(--green); }
+.badge-done       { background: rgba(99,102,241,.15); color: var(--accent);}
+.badge-deploying  { background: rgba(245,158,11,.15); color: var(--amber); }
+.badge-error      { background: rgba(239,68,68,.15);  color: var(--red);   }
+.badge-interrupted{ background: rgba(239,68,68,.15);  color: var(--red);   }
+.badge-stopped    { background: var(--border);        color: var(--muted); }
+.badge-created    { background: rgba(99,102,241,.15); color: var(--accent);}
+
+/* Cluster chips — highlight clusters used in an experiment */
+.cluster-chip {
+  display: inline-block;
+  padding: .15rem .55rem;
+  margin-right: .3rem;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 600;
+  background: rgba(34,197,94,.18);
+  color: var(--green);
+  border: 1px solid rgba(34,197,94,.35);
+}
+
+/* Grid */
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.grid3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; }
+
+/* Form */
+.form-group { margin-bottom: 1rem; }
+label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: .35rem; }
+input, select, textarea { width: 100%; background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 6px; padding: .5rem .75rem; font-size: .875rem; }
+input:focus, select:focus { outline: none; border-color: var(--accent); }
+textarea { font-family: monospace; font-size: .8rem; resize: vertical; }
+
+/* Log stream */
+.log-box { background: #0a0c14; border: 1px solid var(--border); border-radius: 6px; padding: .75rem;
+           font-family: monospace; font-size: .78rem; height: 200px; overflow-y: auto; color: #7ee787; }
+
+/* Worker row */
+.worker-row { display: flex; gap: .5rem; align-items: center; margin-bottom: .5rem; }
+.worker-row input { flex: 1; }
+.worker-row select { width: 110px; }
+
+/* Modal */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 100;
+                 align-items: center; justify-content: center; }
+.modal-overlay.open { display: flex; }
+.modal { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+          width: 640px; max-height: 90vh; overflow-y: auto; padding: 1.5rem; }
+.modal h3 { margin-bottom: 1rem; font-size: 1rem; }
+.modal-footer { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1.5rem; }
+
+/* Experiment cluster selector */
+.exp-cluster-row { display: flex; align-items: center; gap: .75rem; padding: .5rem; background: var(--surface2);
+                    border-radius: 6px; margin-bottom: .5rem; }
+.exp-cluster-row label { margin: 0; font-size: .875rem; color: var(--text); }
+.exp-cluster-row input[type=checkbox] { width: auto; }
+
+/* KPI strip */
+.kpi-strip { display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+        padding: .875rem 1.25rem; min-width: 130px; }
+.kpi .val { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
+.kpi .lbl { font-size: .72rem; color: var(--muted); margin-top: .2rem; }
+
+/* Node table */
+table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+th { text-align: left; color: var(--muted); font-weight: 500; padding: .5rem .75rem; border-bottom: 1px solid var(--border); }
+td { padding: .6rem .75rem; border-bottom: 1px solid var(--border); }
+tr:last-child td { border: none; }
+
+/* YAML preview */
+.yaml-pre { background: #0a0c14; border: 1px solid var(--border); border-radius: 6px; padding: 1rem;
+             font-family: monospace; font-size: .78rem; white-space: pre; overflow: auto; max-height: 500px; color: #c9d1d9; }
+
+/* Experiment list */
+.exp-row { display: flex; align-items: center; gap: .75rem; padding: .6rem 0;
+            border-bottom: 1px solid var(--border); }
+.exp-row:last-child { border: none; }
+.exp-name { font-size: .875rem; flex: 1; }
+.exp-meta { font-size: .75rem; color: var(--muted); }
+.badge-cancelled { background: rgba(239,68,68,.15); color: var(--red); }
+/* Profile textarea hint */
+.hint { font-size: .72rem; color: var(--muted); margin-top: .25rem; }
+
+/* Toast */
+.toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--surface);
+          border: 1px solid var(--border); border-radius: 8px; padding: .75rem 1.25rem;
+          font-size: .875rem; z-index: 200; opacity: 0; transition: opacity .3s; pointer-events: none; }
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════ SIDEBAR ═══════════════════════════ -->
+<aside>
+  <div class="logo">
+    <h1>⚡ LocalAI</h1>
+    <small>Orchestrator</small>
+  </div>
+  <nav>
+    <a class="active" onclick="showPage('clusters')" data-page="clusters"><span>🏗️</span> Clusters</a>
+    <a onclick="showPage('nodes')" data-page="nodes"><span>🖥️</span> Nodes</a>
+    <a onclick="showPage('experiments')" data-page="experiments"><span>🧪</span> Experiments</a>
+    <a onclick="showPage('reports')" data-page="reports"><span>📊</span> Reports</a>
+  </nav>
+</aside>
+
+<!-- ═══════════════════════════ MAIN ═══════════════════════════════ -->
+<main>
+
+<!-- ── CLUSTERS ─────────────────────────────────────────────────── -->
+<div id="page-clusters" class="page active">
+  <div class="page-header">
+    <h2>Mini-Clusters</h2>
+    <button class="btn btn-primary" onclick="openCreateModal()">＋ New Cluster</button>
+  </div>
+  <div id="clusters-list">
+    <p style="color:var(--muted)">Loading...</p>
+  </div>
+</div>
+
+<!-- ── NODES ────────────────────────────────────────────────────── -->
+<div id="page-nodes" class="page">
+  <div class="page-header">
+    <h2>Cluster Nodes</h2>
+    <button class="btn btn-primary" onclick="openAddNodeModal()">＋ Add Node</button>
+  </div>
+  <div class="card">
+    <table id="nodes-table">
+      <thead><tr><th>Name</th><th>Host</th><th>Arch</th><th>GPU</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── EXPERIMENTS ──────────────────────────────────────────────── -->
+<div id="page-experiments" class="page">
+  <div class="page-header">
+    <h2>Experiments</h2>
+    <button class="btn btn-primary" onclick="openExpModal()">▶ New Experiment</button>
+  </div>
+  <div class="card">
+    <div id="exp-list"><p style="color:var(--muted)">No experiments yet.</p></div>
+  </div>
+</div>
+
+<!-- ── REPORTS ──────────────────────────────────────────────────── -->
+<div id="page-reports" class="page">
+  <div class="page-header"><h2>Reports</h2></div>
+  <div id="reports-list">
+    <p style="color:var(--muted)">Run an experiment to generate reports.</p>
+  </div>
+</div>
+
+</main>
+
+<!-- ═══════════ MODAL: Create / Edit Cluster ═══════════ -->
+<div class="modal-overlay" id="clusterModal">
+<div class="modal">
+  <h3 id="clusterModalTitle">New Cluster</h3>
+  <input type="hidden" id="cm-id">
+  <div class="grid2">
+    <div class="form-group">
+      <label>Display Name</label>
+      <input id="cm-name" placeholder="e.g. orin-all-workers">
+    </div>
+    <div class="form-group">
+      <label>Master Node</label>
+      <select id="cm-master"></select>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="form-group">
+      <label>Model</label>
+      <input id="cm-model" placeholder="e.g. Llama-3.2-3B-Instruct-GGUF">
+    </div>
+    <div class="form-group">
+      <label>Storage (GB)</label>
+      <input id="cm-storage" type="number" value="8">
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="form-group">
+      <label>Number of Workers <span style="color:var(--muted);font-size:.8rem">(placement decided by scheduler)</span></label>
+      <input id="cm-workercount" type="number" value="1" min="0" max="16">
+    </div>
+    <div class="form-group">
+      <label>Worker Memory Limit (GiB, 0 = no limit)</label>
+      <input id="cm-workermem" type="number" value="0">
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="closeModal('clusterModal')">Cancel</button>
+    <button class="btn btn-primary" onclick="saveCluster()">Save</button>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════ MODAL: YAML Preview ═══════════ -->
+<div class="modal-overlay" id="yamlModal">
+<div class="modal" style="width:780px">
+  <h3>YAML Preview</h3>
+  <pre id="yaml-content" class="yaml-pre"></pre>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="closeModal('yamlModal')">Close</button>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════ MODAL: Deploy Logs ═══════════ -->
+<div class="modal-overlay" id="logsModal">
+<div class="modal">
+  <h3 id="logs-title">Deploy Logs</h3>
+  <div id="logs-box" class="log-box"></div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="closeModal('logsModal')">Close</button>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════ MODAL: Add Node ═══════════ -->
+<div class="modal-overlay" id="nodeModal">
+<div class="modal">
+  <h3>Add Node</h3>
+  <div class="grid2">
+    <div class="form-group"><label>Name (K8s hostname)</label><input id="nm-name" placeholder="ds-cluster-01-worker-03"></div>
+    <div class="form-group"><label>Host IP</label><input id="nm-host" placeholder="192.168.0.203"></div>
+  </div>
+  <div class="grid2">
+    <div class="form-group"><label>Arch</label>
+      <select id="nm-arch"><option value="amd64">amd64</option><option value="arm64">arm64</option></select>
+    </div>
+    <div class="form-group"><label>GPU Type</label>
+      <select id="nm-gpu"><option value="none">None</option><option value="nvidia">NVIDIA</option></select>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="closeModal('nodeModal')">Cancel</button>
+    <button class="btn btn-primary" onclick="saveNode()">Add Node</button>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════ MODAL: New Experiment ═══════════ -->
+<div class="modal-overlay" id="expModal">
+<div class="modal" style="width:700px">
+  <h3>New Experiment</h3>
+  <div class="form-group">
+    <label>Experiment Name</label>
+    <input id="exp-name" placeholder="e.g. baseline-test-01">
+  </div>
+  <div class="form-group">
+    <label>Load Profile CSV (second,users)</label>
+    <textarea id="exp-profile" rows="6" placeholder="second,users&#10;0,1&#10;30,3&#10;60,5&#10;120,3&#10;180,1"></textarea>
+    <div class="hint">This profile is used for ALL selected clusters unless overridden per-cluster.</div>
+  </div>
+  <div class="form-group">
+    <label>Select Clusters to Test</label>
+    <div id="exp-cluster-list"></div>
+  </div>
+  <div id="exp-cluster-overrides"></div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="closeModal('expModal')">Cancel</button>
+    <button class="btn btn-success" onclick="startExperiment()">▶ Start</button>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════ MODAL: Experiment Logs ═══════════ -->
+<div class="modal-overlay" id="expLogsModal">
+<div class="modal">
+  <h3 id="exp-logs-title">Experiment Logs</h3>
+  <div id="exp-logs-box" class="log-box"></div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="closeModal('expLogsModal')">Close</button>
+    <button id="exp-report-btn" class="btn btn-primary" style="display:none">📊 Open Report</button>
+  </div>
+</div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<!-- ═══════════════════════ JAVASCRIPT ═══════════════════════════ -->
+<script>
+// ── State ─────────────────────────────────────────────────────────
+let state = { nodes: [], clusters: [], nextSeqId: 0 };
+
+// ── Init ──────────────────────────────────────────────────────────
+async function init() {
+  await refresh();
+  setInterval(refresh, 8000);
+}
+
+async function refresh() {
+  const res = await fetch('/api/state');
+  state = await res.json();
+  renderClusters();
+  renderNodes();
+  renderExperiments();
+}
+
+// ── Navigation ────────────────────────────────────────────────────
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav a').forEach(a => {
+    a.classList.toggle('active', a.dataset.page === id);
+  });
+  document.getElementById('page-' + id).classList.add('active');
+  if (id === 'experiments') loadExperiments();
+  if (id === 'reports') loadReports();
+}
+
+// ── Clusters ──────────────────────────────────────────────────────
+function renderClusters() {
+  const el = document.getElementById('clusters-list');
+  if (!state.clusters || !state.clusters.length) {
+    el.innerHTML = '<p style="color:var(--muted)">No clusters defined. Click "+ New Cluster" to start.</p>';
+    return;
+  }
+  el.innerHTML = state.clusters.map(c => `
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div style="display:flex;align-items:center;gap:.5rem">
+            <span class="card-title">${c.id}</span>
+            <span class="badge badge-${c.status||'created'}">${c.status||'created'}</span>
+            ${c.gatewayPort ? `<span style="font-size:.75rem;color:var(--muted)">:${c.gatewayPort}</span>` : ''}
+          </div>
+          <div class="cluster-meta">
+            ${c.name} &nbsp;|&nbsp; master: <strong>${c.masterNode}</strong> &nbsp;|&nbsp;
+            workers: <strong>${Number.isFinite(c.workerCount) ? c.workerCount : (c.workers||[]).length}</strong>
+            ${(c.workers||[]).filter(w=>w.nodeName).length ? '('+c.workers.map(w=>w.nodeName).join(', ')+')' : '<span style="color:var(--amber);font-size:.75rem"> — awaiting scheduler</span>'} &nbsp;|&nbsp;
+            model: ${c.model||'—'}
+          </div>
+        </div>
+        <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="previewYAML('${c.id}')">YAML</button>
+          <button class="btn btn-ghost btn-sm" onclick="editCluster('${c.id}')">Edit</button>
+          <button class="btn btn-ghost btn-sm" onclick="scaleWorkers('${c.id}')" title="Scale workers">⚖ Scale</button>
+          ${c.gatewayPort===0||!c.gatewayPort ? `<button class="btn btn-ghost btn-sm" onclick="refreshGateway('${c.id}')">🔄 GW</button>` : ''}
+          <button class="btn btn-primary btn-sm" onclick="deployCluster('${c.id}')">🚀 Deploy</button>
+          <button class="btn btn-amber btn-sm" onclick="undeployCluster('${c.id}')">⏹ Undeploy</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteCluster('${c.id}')">🗑 Delete</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderNodes() {
+  const tbody = document.querySelector('#nodes-table tbody');
+  if (!state.nodes || !state.nodes.length) { tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted)">No nodes</td></tr>'; return; }
+  tbody.innerHTML = state.nodes.map(n => `
+    <tr>
+      <td>${n.name}</td>
+      <td>${n.host}</td>
+      <td><span class="badge badge-created">${n.arch}</span></td>
+      <td>${n.gpuType === 'nvidia' ? '🟢 '+n.gpuModel : '—'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="removeNode('${n.name}')">Remove</button></td>
+    </tr>
+  `).join('');
+}
+
+// ── Create/Edit Cluster Modal ─────────────────────────────────────
+function openCreateModal() {
+  document.getElementById('clusterModalTitle').textContent = 'New Cluster';
+  document.getElementById('cm-id').value = '';
+  document.getElementById('cm-name').value = '';
+  document.getElementById('cm-model').value = '';
+  document.getElementById('cm-storage').value = '8';
+  document.getElementById('cm-workermem').value = '0';
+  document.getElementById('cm-workercount').value = '1';
+  populateMasterSelect();
+  openModal('clusterModal');
+}
+
+function editCluster(id) {
+  const c = state.clusters.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('clusterModalTitle').textContent = 'Edit Cluster: ' + id;
+  document.getElementById('cm-id').value = c.id;
+  document.getElementById('cm-name').value = c.name;
+  document.getElementById('cm-model').value = c.model||'';
+  document.getElementById('cm-storage').value = c.storageGb||8;
+  document.getElementById('cm-workermem').value = c.workerMemory||0;
+  document.getElementById('cm-workercount').value = Number.isFinite(c.workerCount) ? c.workerCount : ((c.workers||[]).length || 0);
+  populateMasterSelect(c.masterNode);
+  openModal('clusterModal');
+}
+
+function populateMasterSelect(selected) {
+  const sel = document.getElementById('cm-master');
+  sel.innerHTML = (state.nodes||[]).map(n =>
+    `<option value="${n.name}" ${n.name===selected?'selected':''}>${n.name}</option>`
+  ).join('');
+}
+
+async function saveCluster() {
+  const id = document.getElementById('cm-id').value;
+  const wcRaw = parseInt(document.getElementById('cm-workercount').value);
+  const workerCount = Number.isNaN(wcRaw) ? 1 : Math.max(0, wcRaw);
+  const payload = {
+    id,
+    name: document.getElementById('cm-name').value,
+    masterNode: document.getElementById('cm-master').value,
+    model: document.getElementById('cm-model').value,
+    storageGb: parseInt(document.getElementById('cm-storage').value)||8,
+    workerMemory: parseInt(document.getElementById('cm-workermem').value)||0,
+    workerCount,
+    workers: [],
+  };
+
+  const url = id ? '/api/cluster/update' : '/api/cluster/create';
+  const res = await fetch(url, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+  if (res.ok) {
+    closeModal('clusterModal');
+    toast('Cluster saved ✓');
+    await refresh();
+  } else {
+    toast('Error: ' + await res.text(), true);
+  }
+}
+
+async function scaleWorkers(id) {
+  const c = state.clusters.find(x => x.id === id);
+  if (!c) return;
+  const current = c.workerCount || (c.workers||[]).length || 0;
+  const input = prompt(`Scale workers for ${id}\nCurrent: ${current}\nNew count:`, current);
+  if (input === null) return;
+  const target = parseInt(input);
+  if (isNaN(target) || target < 0) { toast('Invalid number', true); return; }
+  const res = await fetch(`/api/cluster/scale?id=${id}&workers=${target}`);
+  if (res.ok) {
+    toast(`Scaled to ${target} workers ✓`);
+    await refresh();
+  } else {
+    toast('Scale error: ' + await res.text(), true);
+  }
+}
+
+// ── Cluster actions ───────────────────────────────────────────────
+async function deployCluster(id) {
+  openModal('logsModal');
+  document.getElementById('logs-title').textContent = 'Deploy: ' + id;
+  const box = document.getElementById('logs-box');
+  box.textContent = '';
+
+  await fetch('/api/cluster/deploy?id=' + id);
+
+  const es = new EventSource('/api/cluster/stream?id=' + id);
+  es.onmessage = e => {
+    if (e.data === '[DONE]') { es.close(); refresh(); return; }
+    box.textContent += e.data + '\n';
+    box.scrollTop = box.scrollHeight;
+  };
+  es.onerror = () => es.close();
+}
+
+async function undeployCluster(id) {
+  if (!confirm('Undeploy cluster ' + id + '?')) return;
+  const res = await fetch('/api/cluster/undeploy?id=' + id, { method: 'POST' });
+  toast(res.ok ? 'Undeployed ✓' : 'Error', !res.ok);
+  await refresh();
+}
+
+async function deleteCluster(id) {
+  if (!confirm('DELETE cluster ' + id + ' and all its K8s resources?')) return;
+  const res = await fetch('/api/cluster/delete?id=' + id, { method: 'POST' });
+  toast(res.ok ? 'Deleted ✓' : 'Error', !res.ok);
+  await refresh();
+}
+
+async function previewYAML(id) {
+  const res = await fetch('/api/cluster/yaml?id=' + id);
+  document.getElementById('yaml-content').textContent = await res.text();
+  openModal('yamlModal');
+}
+
+async function refreshGateway(id) {
+  const res = await fetch('/api/cluster/gateway/refresh?id=' + id);
+  if (res.ok) {
+    const d = await res.json();
+    toast('Gateway port: ' + d.gatewayPort);
+    await refresh();
+  } else {
+    toast('Could not discover gateway yet', true);
+  }
+}
+
+// ── Nodes ─────────────────────────────────────────────────────────
+function openAddNodeModal() { openModal('nodeModal'); }
+
+async function saveNode() {
+  const node = {
+    name: document.getElementById('nm-name').value,
+    host: document.getElementById('nm-host').value,
+    arch: document.getElementById('nm-arch').value,
+    gpuType: document.getElementById('nm-gpu').value,
+    gpuModel: '',
+    user: 'administrator',
+    isOrin: document.getElementById('nm-arch').value === 'arm64',
+  };
+  const nodes = [...(state.nodes||[]), node];
+  const res = await fetch('/api/nodes/save', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(nodes) });
+  if (res.ok) { closeModal('nodeModal'); toast('Node added ✓'); await refresh(); }
+  else toast('Error: ' + await res.text(), true);
+}
+
+async function removeNode(name) {
+  if (!confirm('Remove node ' + name + '?')) return;
+  const nodes = (state.nodes||[]).filter(n => n.name !== name);
+  await fetch('/api/nodes/save', { method: 'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(nodes) });
+  await refresh();
+}
+
+// ── Experiments ───────────────────────────────────────────────────
+let experiments = [];
+
+async function loadExperiments() {
+  const res = await fetch('/api/experiment/list');
+  experiments = await res.json() || [];
+  renderExperiments();
+  renderReports();
+}
+async function cancelExperiment(id) {
+  if (!confirm(`Cancel experiment ${id}?`)) return;
+  const res = await fetch(`/api/experiment/cancel?id=${id}`);
+  if (res.ok) {
+    toast('Experiment cancelled ✓');
+    await refresh();
+  } else {
+    toast('Cancel error: ' + await res.text(), true);
+  }
+}
+function renderExperiments() {
+  const el = document.getElementById('exp-list');
+  if (!experiments || !experiments.length) {
+    el.innerHTML = '<p style="color:var(--muted)">No experiments yet.</p>'; return;
+  }
+  el.innerHTML = experiments.map(e => `
+    <div class="exp-row">
+      <div class="exp-name">${e.name} <span class="badge badge-${e.status}">${e.status}</span></div>
+      <div class="exp-meta">${e.clusters.map(c=>`<span class="cluster-chip">${c.clusterId}</span>`).join(' ')}</div>
+      <div class="exp-meta">${new Date(e.startedAt).toLocaleString()}</div>
+     <button class="btn btn-ghost btn-sm" onclick="openExpLogs('${e.id}')">Logs</button>
+     ${e.status==='running' ? `<button class="btn btn-danger btn-sm" onclick="cancelExperiment('${e.id}')">⏹ Cancel</button>` : ''}
+     ${e.status==='done' ? `<button class="btn btn-primary btn-sm" onclick="openReport('${e.id}')">📊 Report</button>` : ''}
+    </div>
+  `).join('');
+}
+
+function renderReports() {
+  const el = document.getElementById('reports-list');
+  const done = (experiments||[]).filter(e => e.status === 'done');
+  if (!done.length) { el.innerHTML = '<p style="color:var(--muted)">No reports yet.</p>'; return; }
+  el.innerHTML = done.map(e => `
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">${e.name}</div>
+          <div class="cluster-meta">${e.clusters.map(c=>`<span class="cluster-chip">${c.clusterId}</span>`).join(' ')} &nbsp;|&nbsp; ${new Date(e.startedAt).toLocaleString()}</div>
+        </div>
+        <button class="btn btn-primary" onclick="openReport('${e.id}')">📊 Open Report</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openReport(id) {
+  window.open('/api/experiment/report?id=' + id, '_blank');
+}
+
+function openExpModal() {
+  const list = document.getElementById('exp-cluster-list');
+  list.innerHTML = (state.clusters||[]).map(c => `
+    <div class="exp-cluster-row">
+      <input type="checkbox" id="ec-${c.id}" value="${c.id}">
+      <label for="ec-${c.id}">${c.id} — ${c.model||'no model'} ${c.gatewayPort ? '✓ :'+c.gatewayPort : '⚠ no gateway'}</label>
+    </div>
+  `).join('');
+  openModal('expModal');
+}
+
+async function startExperiment() {
+  const name = document.getElementById('exp-name').value || 'experiment-' + Date.now();
+  const profile = document.getElementById('exp-profile').value;
+  const selectedIDs = [...document.querySelectorAll('#exp-cluster-list input:checked')].map(i => i.value);
+
+  if (!selectedIDs.length) { toast('Select at least one cluster', true); return; }
+
+  const clusters = selectedIDs.map(id => {
+    const c = state.clusters.find(x => x.id === id);
+    const masterNode = c ? (state.nodes||[]).find(n => n.name === c.masterNode) : null;
+    return {
+      clusterId: id,
+      gatewayHost: masterNode ? masterNode.host : '',
+      gatewayPort: c ? (c.gatewayPort||0) : 0,
+      model: c ? (c.model||'') : '',
+      profileCsv: '',
+    };
+  });
+
+  const res = await fetch('/api/experiment/start', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ name, profile, clusters }),
+  });
+
+  if (!res.ok) { toast('Error: ' + await res.text(), true); return; }
+  const d = await res.json();
+  closeModal('expModal');
+  toast('Experiment started ✓');
+  openExpLogs(d.experimentId);
+  await loadExperiments();
+}
+
+async function openExpLogs(id) {
+  openModal('expLogsModal');
+  document.getElementById('exp-logs-title').textContent = 'Experiment Logs: ' + id;
+  const box = document.getElementById('exp-logs-box');
+  box.textContent = '';
+  document.getElementById('exp-report-btn').style.display = 'none';
+
+  const es = new EventSource('/api/experiment/stream?id=' + id);
+  es.onmessage = e => {
+    if (e.data === '[DONE]') {
+      es.close();
+      document.getElementById('exp-report-btn').style.display = '';
+      document.getElementById('exp-report-btn').onclick = () => openReport(id);
+      loadExperiments();
+      return;
+    }
+    box.textContent += e.data + '\n';
+    box.scrollTop = box.scrollHeight;
+  };
+  es.onerror = () => es.close();
+}
+
+// ── Modals ────────────────────────────────────────────────────────
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+
+// ── Toast ─────────────────────────────────────────────────────────
+function toast(msg, isErr) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.borderColor = isErr ? 'var(--red)' : 'var(--green)';
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ── Start ─────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

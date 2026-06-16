@@ -1,0 +1,49 @@
+{
+  "id": "exp-1780903132182",
+  "name": "cluster orin 1 worker",
+  "startedAt": "2026-06-08T09:18:52.182920438+02:00",
+  "finishedAt": "2026-06-08T10:19:36.098501427+02:00",
+  "status": "done",
+  "clusters": [
+    {
+      "clusterId": "cluster-5",
+      "gatewayHost": "192.168.1.99",
+      "gatewayPort": 30106,
+      "model": "qwen_qwen3.5-2b",
+      "profileCsv": ""
+    }
+  ],
+  "reportFile": "experiments/results/exp-1780903132182/report.html",
+  "logs": [
+    "[09:18:52] Generating locustfiles...",
+    "[09:18:52] [cluster-5] profile: 5 lines",
+    "[09:18:52] Locustfile ready for cluster-5 → 192.168.1.99:30106 model=qwen_qwen3.5-2b",
+    "[09:18:52] Starting parallel load tests (inside cluster)...",
+    "[09:18:52] [cluster-5] locust → http://local-ai-cluster-5.local-ai.svc.cluster.local:8080 (ClusterIP, Istio sidecar active)",
+    "[09:18:52] [cluster-5] Locustfile encoded (2714 bytes → 3620 b64 chars)",
+    "[09:18:52] [cluster-5] Job locust-cluster-5-1780903132 created",
+    "[09:18:55] [cluster-5] Pod ready: locust-cluster-5-1780903132-kl4cf",
+    "[09:18:55] [cluster-5] [cluster-5] Profile loaded: 5 entries, last={'second': 3600, 'users': 0}",
+    "[09:18:55] [cluster-5] [2026-06-08 07:18:54,462] locust-cluster-5-1780903132-kl4cf/INFO/locust.runners: Shape test updating to 1 users at 1.00 spawn rate",
+    "[09:18:55] [cluster-5] [2026-06-08 07:18:54,462] locust-cluster-5-1780903132-kl4cf/INFO/locust.runners: Ramping to 1 users at a rate of 1.00 per second",
+    "[09:18:55] [cluster-5] [2026-06-08 07:18:54,462] locust-cluster-5-1780903132-kl4cf/INFO/locust.runners: All users spawned: {\"LLMUser\": 1} (1 total users)",
+    "[09:28:54] [cluster-5] [2026-06-08 07:28:54,117] locust-cluster-5-1780903132-kl4cf/INFO/locust.runners: Shape test updating to 2 users at 1.00 spawn rate",
+    "[09:28:54] [cluster-5] [2026-06-08 07:28:54,117] locust-cluster-5-1780903132-kl4cf/INFO/locust.runners: Ramping to 2 users at a rate of 1.00 per second",
+    "[09:28:54] [cluster-5] [2026-06-08 07:28:54,117] locust-cluster-5-1780903132-kl4cf/INFO/locust.runners: All users spawned: {\"LLMUser\": 2} (2 total users)",
+    "[09:38:54] [cluster-5] [2026-06-08 07:38:54,843] locust-cluster-5-1780903132-kl4cf/INFO/locust.runners: Shape test updating to 3 users at 1.00 spawn rate",
+    "[09:38:54] [cluster-5] [2026-06-08 07:38:54,844] locust-cluster-5-1780903132-kl4cf/INFO/locust.runners: Ramping to 3 users at a rate of 1.00 per second",
+    "[09:38:54] [cluster-5] [2026-06-08 07:38:54,844] locust-cluster-5-1780903132-kl4cf/INFO/locust.runners: All users spawned: {\"LLMUser\": 3} (3 total users)",
+    "[09:48:54] [cluster-5] [2026-06-08 07:48:54,491] locust-cluster-5-1780903132-kl4cf/INFO/locust.runners: Shape test updating to 4 users at 1.00 spawn rate",
+    "[09:48:54] [cluster-5] [2026-06-08 07:48:54,492] locust-cluster-5-1780903132-kl4cf/INFO/locust.runners: Ramping to 4 users at a rate of 1.00 per second",
+    "[09:48:54] [cluster-5] [2026-06-08 07:48:54,492] locust-cluster-5-1780903132-kl4cf/INFO/locust.runners: All users spawned: {\"LLMUser\": 4} (4 total users)",
+    "[10:18:54] [cluster-5] ✓ 19 requests completed",
+    "[10:18:54] [cluster-5] ✓ 248000 requests completed",
+    "[10:19:03] [cluster-5] ✅ locust job done",
+    "[10:19:03] Waiting 30s for Prometheus data flush...",
+    "[10:19:33] Fetching metrics from Prometheus...",
+    "[10:19:33] Scraping metrics for cluster-5...",
+    "[10:19:36] Generating HTML report...",
+    "[10:19:36] Report ready: experiments/results/exp-1780903132182/report.html",
+    "[10:19:36] Experiment complete."
+  ]
+}

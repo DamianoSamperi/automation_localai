@@ -1,0 +1,69 @@
+---
+# ServiceMonitor: scrape Istio sidecar (Envoy) metrics from all pods
+# in the local-ai namespace that have istio-injection enabled.
+# Requires Prometheus Operator (kube-prometheus-stack).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: istio-envoy-local-ai
+  namespace: local-ai
+  labels:
+    app: localai-orchestrator
+    release: prometheus   # match your Prometheus Operator release label
+spec:
+  selector:
+    matchLabels: {}  # matches all Services in the namespace
+  namespaceSelector:
+    matchNames:
+      - local-ai
+  endpoints:
+    - port: http-envoy-prom   # Envoy admin port exposed by Istio sidecar (15090)
+      path: /stats/prometheus
+      interval: 15s
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_label_app]
+          targetLabel: app
+        - sourceLabels: [__meta_kubernetes_pod_label_cluster_id]
+          targetLabel: cluster_id
+        - sourceLabels: [__meta_kubernetes_pod_label_role]
+          targetLabel: role
+---
+# PodMonitor: directly scrape Envoy from each pod (port 15090)
+# More reliable than ServiceMonitor when Services don't expose 15090.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: istio-pods-local-ai
+  namespace: local-ai
+  labels:
+    app: localai-orchestrator
+    release: prometheus
+spec:
+  selector:
+    matchExpressions:
+      - key: cluster-id
+        operator: Exists   # only pods that belong to a mini-cluster
+  namespaceSelector:
+    matchNames:
+      - local-ai
+  podMetricsEndpoints:
+    - port: http-envoy-prom
+      path: /stats/prometheus
+      interval: 15s
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_label_app]
+          targetLabel: app
+        - sourceLabels: [__meta_kubernetes_pod_label_cluster_id]
+          targetLabel: cluster_id
+        - sourceLabels: [__meta_kubernetes_pod_label_role]
+          targetLabel: role
+---
+# Patch the Istio sidecar to expose port 15090 as a named port
+# so ServiceMonitor/PodMonitor can find it.
+# Apply this to the local-ai namespace once after Istio installation:
+#
+#   kubectl apply -f manifests/istio-servicemonitor.yaml
+#
+# Then verify metrics are flowing:
+#   kubectl port-forward -n local-ai <any-pod> 15090
+#   curl http://localhost:15090/stats/prometheus | grep istio_requests

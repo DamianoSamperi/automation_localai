@@ -1,0 +1,40 @@
+{
+  "id": "exp-1780685819802",
+  "name": "prova istio",
+  "startedAt": "2026-06-05T20:56:59.802504655+02:00",
+  "finishedAt": "2026-06-05T20:59:43.237797704+02:00",
+  "status": "done",
+  "clusters": [
+    {
+      "clusterId": "cluster-3",
+      "gatewayHost": "192.168.0.201",
+      "gatewayPort": 30820,
+      "model": "qwen_qwen3.5-0.8b",
+      "profileCsv": ""
+    }
+  ],
+  "reportFile": "experiments/results/exp-1780685819802/report.html",
+  "logs": [
+    "[20:56:59] Generating locustfiles...",
+    "[20:56:59] [cluster-3] profile: 2 lines",
+    "[20:56:59] Locustfile ready for cluster-3 → 192.168.0.201:30820 model=qwen_qwen3.5-0.8b",
+    "[20:56:59] Starting parallel load tests (inside cluster)...",
+    "[20:56:59] [cluster-3] locust → http://local-ai-cluster-3.local-ai.svc.cluster.local:8080 (ClusterIP, Istio sidecar active)",
+    "[20:56:59] [cluster-3] Locustfile encoded (2697 bytes → 3596 b64 chars)",
+    "[20:57:00] [cluster-3] Job locust-cluster-3-1780685819 created",
+    "[20:57:03] [cluster-3] Pod ready: locust-cluster-3-1780685819-wsj7h",
+    "[20:57:04] [cluster-3] [cluster-3] Profile loaded: 2 entries, last={'second': 120, 'users': 0}",
+    "[20:57:04] [cluster-3] [2026-06-05 18:57:02,598] locust-cluster-3-1780685819-wsj7h/INFO/locust.runners: Shape test updating to 8 users at 1.00 spawn rate",
+    "[20:57:04] [cluster-3] [2026-06-05 18:57:02,598] locust-cluster-3-1780685819-wsj7h/INFO/locust.runners: Ramping to 8 users at a rate of 1.00 per second",
+    "[20:57:09] [cluster-3] [2026-06-05 18:57:09,616] locust-cluster-3-1780685819-wsj7h/INFO/locust.runners: All users spawned: {\"LLMUser\": 8} (8 total users)",
+    "[20:59:02] [cluster-3] ✓ 2 requests completed",
+    "[20:59:02] [cluster-3] ✓ 102000 requests completed",
+    "[20:59:11] [cluster-3] ✅ locust job done",
+    "[20:59:11] Waiting 30s for Prometheus data flush...",
+    "[20:59:41] Fetching metrics from Prometheus...",
+    "[20:59:41] Scraping metrics for cluster-3...",
+    "[20:59:43] Generating HTML report...",
+    "[20:59:43] Report ready: experiments/results/exp-1780685819802/report.html",
+    "[20:59:43] Experiment complete."
+  ]
+}
