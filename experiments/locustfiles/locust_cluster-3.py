@@ -7,8 +7,10 @@ MODEL = os.getenv("MODEL_NAME", "qwen_qwen3.5-0.8b")
 CLUSTER_ID = os.getenv("CLUSTER_ID", "cluster-3")
 
 PROFILE_CSV = """second,users
-0,8
-120,0"""
+0,1
+200,2
+400,3
+600,0"""
 
 profile = []
 try:

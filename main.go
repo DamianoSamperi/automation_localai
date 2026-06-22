@@ -36,7 +36,7 @@ type NodeConfig struct {
 }
 
 type WorkerConfig struct {
-	NodeName      string `json:"nodeName"`      // set by scheduler, empty = not yet placed
+	NodeName      string `json:"nodeName"` // set by scheduler, empty = not yet placed
 	Replicas      int    `json:"replicas"`
 	Arch          string `json:"arch"`
 	Mem           int    `json:"mem"`
@@ -51,30 +51,32 @@ type ClusterConfig struct {
 	MasterNode string         `json:"masterNode"`
 	Workers    []WorkerConfig `json:"workers"`
 	// Desired number of workers — scheduler fills Workers[] based on this
-	WorkerCount  int    `json:"workerCount"`
-	P2PToken     string `json:"p2pToken"`
-	StorageGB    int    `json:"storageGb"`
-	// Port used internally by LocalAI process (NOT a NodePort anymore)
-	Portbind     int    `json:"port"`
-	WorkerMemory int    `json:"workerMemory"`
-	Model        string `json:"model"` // model served by this master
-	Status       string `json:"status,omitempty"`
-	GatewayHost  string `json:"gatewayHost,omitempty"`
-	GatewayPort  int    `json:"gatewayPort,omitempty"`
+	WorkerCount        int                           `json:"workerCount"`
+	P2PToken           string                        `json:"p2pToken"`
+	StorageGB          int                           `json:"storageGb"`
+	Portbind           int                           `json:"port"`
+	WorkerMemory       int                           `json:"workerMemory"`
+	Model              string                        `json:"model"`
+	Status             string                        `json:"status,omitempty"`
+	GatewayHost        string                        `json:"gatewayHost,omitempty"`
+	GatewayPort        int                           `json:"gatewayPort,omitempty"`
+	SavedAnnotations   map[string]map[string]string  `json:"savedAnnotations,omitempty"`
+	UseCustomScheduler bool                          `json:"useCustomScheduler,omitempty"`
+	UseGPU             bool                          `json:"useGpu,omitempty"`
 }
 
 type AppConfig struct {
 	Nodes      []NodeConfig    `json:"nodes"`
 	Clusters   []ClusterConfig `json:"clusters"`
-	NextSeqID  int             `json:"nextSeqId"` // monotonically increasing
-	Prometheus string          `json:"prometheus"` // e.g. "http://...:32090"
+	NextSeqID  int             `json:"nextSeqId"`
+	Prometheus string          `json:"prometheus"`
 }
 
 type Manager struct {
 	mu         sync.RWMutex
 	config     AppConfig
 	cfgFile    string
-	logStreams  map[string]chan string
+	logStreams map[string]chan string
 	expManager *experiment.Manager
 }
 
@@ -83,7 +85,7 @@ type Manager struct {
 func NewManager(cfgFile string) *Manager {
 	m := &Manager{
 		cfgFile:    cfgFile,
-		logStreams:  make(map[string]chan string),
+		logStreams: make(map[string]chan string),
 		config: AppConfig{
 			Nodes:      []NodeConfig{},
 			Clusters:   []ClusterConfig{},
@@ -94,8 +96,6 @@ func NewManager(cfgFile string) *Manager {
 	m.loadConfig()
 	m.expManager = experiment.NewManager("experiments", m.config.Prometheus)
 
-	// Start the metrics controller — scrapes Prometheus and annotates nodes/deployments
-	// for the NetworkAware scheduler plugin.
 	mc := NewMetricsController(
 		m.config.Prometheus,
 		func() []NodeConfig {
@@ -127,7 +127,6 @@ func (m *Manager) loadConfig() {
 	if err := json.Unmarshal(data, &m.config); err != nil {
 		log.Printf("Config parse error: %v", err)
 	}
-	// Migrate legacy clusters that have no SeqID or Portbind
 	changed := false
 	for i := range m.config.Clusters {
 		if m.config.Clusters[i].SeqID == 0 && m.config.Clusters[i].ID != "" {
@@ -135,7 +134,6 @@ func (m *Manager) loadConfig() {
 			m.config.Clusters[i].SeqID = m.config.NextSeqID
 			changed = true
 		}
-		// hostNetwork masters share node IP: each needs a unique port (8080+SeqID)
 		if m.config.Clusters[i].Portbind == 0 || m.config.Clusters[i].Portbind == 8080 {
 			m.config.Clusters[i].Portbind = 8080 + m.config.Clusters[i].SeqID
 			changed = true
@@ -153,6 +151,7 @@ func (m *Manager) saveConfig() error {
 	}
 	return os.WriteFile(m.cfgFile, data, 0644)
 }
+
 func (m *Manager) handleCancelExperiment(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	if id == "" {
@@ -166,10 +165,9 @@ func (m *Manager) handleCancelExperiment(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "cancelled"})
 }
+
 // ── P2P Token Generation ──────────────────────────────────────────────────────
 
-// generateP2PToken creates a LocalAI-compatible P2P config token (base64 YAML).
-// The room, DHT key, and crypto key are all randomised.
 func generateP2PToken(clusterID string) string {
 	randStr := func(n int) string {
 		b := make([]byte, n)
@@ -295,22 +293,40 @@ data: {}`
 }
 
 // generateMasterYAML produces the Deployment + ClusterIP Service for a master.
-// NodePort is REMOVED — traffic goes through Istio Gateway.
-// Labels include cluster-id and app=<clusterID>_master for Istio telemetry.
+// MasterNode can be empty ("Let scheduler decide") — in that case the pod is
+// constrained to amd64, non-control-plane nodes, and the GPU/runtimeClass
+// block is never set (we can't know in advance which node will be picked).
 func (m *Manager) generateMasterYAML(cluster *ClusterConfig, nodes map[string]*NodeConfig) string {
-	master := nodes[cluster.MasterNode]
-	hostname := master.Name
-	image := "localai/localai:latest-nvidia-l4t-arm64"
-	runtimeBlock := `runtimeClassName: "nvidia"`
-	gpuLimits := `nvidia.com/gpu.shared: 1`
-	backendPVC := "localai-backend-arm64-pvc"
-	if master.Arch == "amd64" {
-		backendPVC = "localai-backend-amd64-pvc"
+	hostname := ""
+	masterArch := "amd64"
+	masterGPUType := "none"
+	if cluster.MasterNode != "" {
+		if master, ok := nodes[cluster.MasterNode]; ok && master != nil {
+			hostname = master.Name
+			masterArch = master.Arch
+			masterGPUType = master.GPUType
+		}
 	}
-	if master.GPUType != "nvidia" {
-		image = "localai/localai:latest-aio-cpu"
-		runtimeBlock = ""
-		gpuLimits = ""
+
+	image := "localai/localai:latest-aio-cpu"
+	masterArchPath := "/backends/amd64"
+	if masterArch == "arm64" {
+		image = "localai/localai:latest-nvidia-l4t-arm64"
+		masterArchPath = "/backends/arm64"
+	}
+
+	schedulerLine := ""
+	if cluster.UseCustomScheduler {
+		schedulerLine = "      schedulerName: scheduler-plugins-scheduler"
+	}
+
+	// GPU enabled only if explicitly requested AND the pinned node has NVIDIA.
+	// When unpinned, GPU block always stays empty (node unknown ahead of time).
+	runtimeLine := ""
+	gpuLimits := ""
+	if cluster.UseGPU && masterGPUType == "nvidia" {
+		runtimeLine = `runtimeClassName: "nvidia"`
+		gpuLimits = `nvidia.com/gpu.shared: 1`
 	}
 
 	gpuLimitsBlock := ""
@@ -320,15 +336,30 @@ func (m *Manager) generateMasterYAML(cluster *ClusterConfig, nodes map[string]*N
               %s`, gpuLimits)
 	}
 
-	runtimeLine := ""
-	if runtimeBlock != "" {
-		runtimeLine = runtimeBlock
+	var nodeSelectorBlock string
+	if hostname != "" {
+		nodeSelectorBlock = fmt.Sprintf("      nodeSelector:\n        kubernetes.io/hostname: %s", hostname)
+	} else {
+		nodeSelectorBlock = `      nodeSelector:
+        kubernetes.io/arch: amd64
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist`
 	}
 
 	modelEnv := ""
 	if cluster.Model != "" {
 		modelEnv = fmt.Sprintf(`            - name: MODELS
               value: "%s"`, cluster.Model)
+	}
+
+	masterSavedAnn := ""
+	if cluster.SavedAnnotations != nil {
+		masterSavedAnn = buildAnnotationBlock(cluster.SavedAnnotations["master"], "        ")
 	}
 
 	return fmt.Sprintf(`apiVersion: apps/v1
@@ -352,15 +383,16 @@ spec:
         cluster-id: "%s"
         role: master
       annotations:
-        prometheus.io/scrape: "true"
+%s        prometheus.io/scrape: "true"
         prometheus.io/port: "%d"
         prometheus.io/path: "/metrics"
+        localai-backends-path: "%s"
     spec:
+%s
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
       %s
-      nodeSelector:
-        kubernetes.io/hostname: %s
+%s
       containers:
         - name: local-ai
           image: %s
@@ -377,6 +409,10 @@ spec:
               value: "true"
             - name: MODELS
               value: "[]"
+            - name: LOCALAI_BACKENDS_PATH
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['localai-backends-path']
 %s
 %s
           volumeMounts:
@@ -390,7 +426,7 @@ spec:
             claimName: localai-shared-models-pvc
         - name: local-backends
           persistentVolumeClaim:
-            claimName: %s
+            claimName: localai-backend-all-pvc
 ---
 apiVersion: v1
 kind: Service
@@ -414,14 +450,17 @@ spec:
 		cluster.ID, cluster.ID,
 		cluster.ID,
 		cluster.ID, cluster.ID,
+		masterSavedAnn,
 		cluster.Portbind,
-		runtimeLine, hostname,
+		masterArchPath,
+		schedulerLine,
+		runtimeLine,
+		nodeSelectorBlock,
 		image,
 		cluster.Portbind,
 		cluster.P2PToken,
 		modelEnv,
 		gpuLimitsBlock,
-		backendPVC,
 		cluster.ID,
 		cluster.ID, cluster.ID,
 		cluster.ID,
@@ -430,9 +469,7 @@ spec:
 }
 
 // generateGatewayYAML produces the Istio Gateway + HTTPRoute for one master.
-// The Gateway listens on a dedicated port so we can discover it via label.
 func (m *Manager) generateGatewayYAML(cluster *ClusterConfig) string {
-	// Port 8000+seqId to avoid collisions between clusters.
 	gatewayPort := 8000 + cluster.SeqID
 	return fmt.Sprintf(`apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
@@ -480,8 +517,9 @@ spec:
 	)
 }
 
+// generateWorkerYAML produces the Deployment for one worker replica set.
 func (m *Manager) generateWorkerYAML(cluster *ClusterConfig, worker WorkerConfig, port int) string {
-	image := "localai/localai:latest-aio-cpu"
+	image := "localai/localai:latest-cpu"
 	if worker.Arch == "arm64" {
 		image = "localai/localai:latest-nvidia-l4t-arm64"
 	}
@@ -491,7 +529,6 @@ func (m *Manager) generateWorkerYAML(cluster *ClusterConfig, worker WorkerConfig
 	if worker.NodeName != "" {
 		nodeSelector = fmt.Sprintf(`        kubernetes.io/hostname: %s`, worker.NodeName)
 	} else if worker.Arch == "" {
-		// No arch constraint — let scheduler pick any node
 		nodeSelector = `        {}`
 	}
 
@@ -502,7 +539,16 @@ func (m *Manager) generateWorkerYAML(cluster *ClusterConfig, worker WorkerConfig
               memory: "%dGi"`, cluster.WorkerMemory)
 	}
 
-	// Worker label for Istio telemetry
+	schedulerLine := ""
+	if cluster.UseCustomScheduler {
+		schedulerLine = "      schedulerName: scheduler-plugins-scheduler"
+	}
+
+	workerArchPath := "/backends/amd64"
+	if worker.Arch == "arm64" {
+		workerArchPath = "/backends/arm64"
+	}
+
 	workerSuffix := worker.NodeName
 	if workerSuffix == "" {
 		workerSuffix = fmt.Sprintf("worker-%d", port)
@@ -562,7 +608,7 @@ func (m *Manager) generateWorkerYAML(cluster *ClusterConfig, worker WorkerConfig
           image: %s
           imagePullPolicy: IfNotPresent
           args:
-            - worker
+            - p2p-worker
             - p2p-llama-cpp-rpc
           env:
             - name: DEBUG
@@ -573,6 +619,10 @@ func (m *Manager) generateWorkerYAML(cluster *ClusterConfig, worker WorkerConfig
               value: "[]"
             - name: LOCALAI_LOG_LEVEL
               value: "debug"
+            - name: LOCALAI_BACKENDS_PATH
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['localai-backends-path']
           volumeMounts:
             - name: lxcfs-proc-meminfo
               mountPath: /proc/meminfo
@@ -589,7 +639,12 @@ func (m *Manager) generateWorkerYAML(cluster *ClusterConfig, worker WorkerConfig
             path: /var/lib/lxcfs/proc/meminfo
         - name: local-backends
           persistentVolumeClaim:
-            claimName: localai-backend-amd64-pvc`
+            claimName: localai-backend-all-pvc`
+
+	workerSavedAnn := ""
+	if cluster.SavedAnnotations != nil {
+		workerSavedAnn = buildAnnotationBlock(cluster.SavedAnnotations[workerSuffix], "        ")
+	}
 
 	return fmt.Sprintf(`apiVersion: apps/v1
 kind: Deployment
@@ -612,9 +667,11 @@ spec:
         cluster-id: "%s"
         role: worker
       annotations:
-        prometheus.io/scrape: "true"
+%s        prometheus.io/scrape: "true"
         prometheus.io/port: "2112"
+        localai-backends-path: "%s"
     spec:
+%s
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
       serviceAccountName: localai-worker-sidecar
@@ -652,6 +709,9 @@ spec:
 		worker.Replicas,
 		workerLabel,
 		workerLabel, cluster.ID,
+		workerSavedAnn,
+		workerArchPath,
+		schedulerLine,
 		nodeSelector,
 		containerSpec,
 		sidecarImage,
@@ -662,7 +722,7 @@ spec:
 	)
 }
 
-// ── PV/PVC helpers (unchanged from original) ──────────────────────────────────
+// ── PV/PVC helpers ──────────────────────────────────────────────────────────
 
 func (m *Manager) createStaticPV(name, path string, storage int) error {
 	pvYAML := fmt.Sprintf(`
@@ -677,7 +737,7 @@ spec:
     - ReadWriteMany
   persistentVolumeReclaimPolicy: Retain
   nfs:
-    server: 192.168.0.51
+    server: 192.168.1.51
     path: %s
 `, name, storage, path)
 	cmd := exec.Command("kubectl", "apply", "-f", "-")
@@ -713,9 +773,10 @@ spec:
 
 func (m *Manager) EnsureSharedPVs() {
 	pvMap := map[string]string{
-		"pv-models":      "/data/nfs/ds-cluster-01/modelli-localai",
+		"pv-models":     "/data/nfs/ds-cluster-01/modelli-localai",
 		"pv-backend-arm": "/data/nfs/ds-cluster-01/backends-localai-master",
 		"pv-backend-amd": "/data/nfs/ds-cluster-01/backends-localai-worker",
+		"pv-backend-all": "/data/nfs/ds-cluster-01/backends-localai-all",
 	}
 	for name, path := range pvMap {
 		check := exec.Command("kubectl", "get", "pv", name)
@@ -723,7 +784,7 @@ func (m *Manager) EnsureSharedPVs() {
 			continue
 		}
 		storage := 5
-		if name == "pv-models" {
+		if name == "pv-models" || name == "pv-backend-all" {
 			storage = 10
 		}
 		if err := m.createStaticPV(name, path, storage); err != nil {
@@ -736,9 +797,6 @@ func (m *Manager) EnsureSharedPVs() {
 
 // ── Gateway Port Discovery ────────────────────────────────────────────────────
 
-// discoverGatewayPort reads the NodePort assigned by Istio to the Gateway Service
-// for the given cluster. It looks for a Service with label cluster-id=<id> and
-// role=gateway in the local-ai namespace.
 func discoverGatewayPort(clusterID string) (int, error) {
 	out, err := exec.Command("kubectl", "get", "service",
 		"-n", "local-ai",
@@ -788,7 +846,6 @@ func (m *Manager) deployCluster(clusterID string) {
 	}
 
 	defer func() {
-		// Wait a bit then try to discover the gateway port
 		time.Sleep(15 * time.Second)
 		port, err := discoverGatewayPort(clusterID)
 		if err == nil {
@@ -832,6 +889,7 @@ func (m *Manager) deployCluster(clusterID string) {
 	m.ensureNFSPVC("localai-shared-models-pvc", "pv-models", 10)
 	m.ensureNFSPVC("localai-backend-arm64-pvc", "pv-backend-arm", 5)
 	m.ensureNFSPVC("localai-backend-amd64-pvc", "pv-backend-amd", 5)
+	m.ensureNFSPVC("localai-backend-all-pvc", "pv-backend-all", 10)
 
 	nodeMap := make(map[string]*NodeConfig)
 	m.mu.RLock()
@@ -850,7 +908,6 @@ func (m *Manager) deployCluster(clusterID string) {
 
 	basePort := 19000 + clusterIdx*100
 
-	// Master
 	masterYAML := m.generateMasterYAML(&clusterCopy, nodeMap)
 	masterFile := filepath.Join(os.TempDir(), fmt.Sprintf("master-%s.yaml", clusterID))
 	if err := os.WriteFile(masterFile, []byte(masterYAML), 0644); err != nil {
@@ -865,7 +922,6 @@ func (m *Manager) deployCluster(clusterID string) {
 	}
 	addLog("Master deployed")
 
-	// Gateway
 	gatewayYAML := m.generateGatewayYAML(&clusterCopy)
 	gatewayFile := filepath.Join(os.TempDir(), fmt.Sprintf("gateway-%s.yaml", clusterID))
 	if err := os.WriteFile(gatewayFile, []byte(gatewayYAML), 0644); err != nil {
@@ -877,21 +933,16 @@ func (m *Manager) deployCluster(clusterID string) {
 	}
 
 	// Workers — deploya sempre WorkerCount worker.
-	// Se NodeName è vuoto, il kube-scheduler (default o con plugin custom) decide il nodo.
+	// Se NodeName è vuoto, il kube-scheduler (default o custom) decide il nodo.
 	workerTotal := clusterCopy.WorkerCount
-	// if workerTotal == 0 {
-	// 	workerTotal = len(clusterCopy.Workers)
-	// }
 	for i := 0; i < workerTotal; i++ {
 		var worker WorkerConfig
 		if i < len(clusterCopy.Workers) {
 			worker = clusterCopy.Workers[i]
 		} else {
-			// Placeholder worker — no node, no arch: kube-scheduler decides
 			worker = WorkerConfig{
 				NodeName: "",
 				Replicas: 1,
-				Arch:     "amd64",
 			}
 		}
 		port := basePort + i
@@ -988,6 +1039,7 @@ func (m *Manager) generateYAMLPreview(clusterID string) string {
 	defer m.mu.RUnlock()
 	var cluster *ClusterConfig
 	clusterIdx := 0
+
 	for i := range m.config.Clusters {
 		if m.config.Clusters[i].ID == clusterID {
 			cluster = &m.config.Clusters[i]
@@ -1008,8 +1060,22 @@ func (m *Manager) generateYAMLPreview(clusterID string) string {
 	buf.WriteString(m.generateMasterYAML(cluster, nodeMap))
 	buf.WriteString("\n# === GATEWAY ===\n")
 	buf.WriteString(m.generateGatewayYAML(cluster))
-	for i, w := range cluster.Workers {
-		buf.WriteString(fmt.Sprintf("\n# === WORKER: %s ===\n", w.NodeName))
+	workerTotal := cluster.WorkerCount
+	if workerTotal == 0 {
+		workerTotal = len(cluster.Workers)
+	}
+	for i := 0; i < workerTotal; i++ {
+		var w WorkerConfig
+		if i < len(cluster.Workers) {
+			w = cluster.Workers[i]
+		} else {
+			w = WorkerConfig{Replicas: 1}
+		}
+		suffix := w.NodeName
+		if suffix == "" {
+			suffix = fmt.Sprintf("worker-%d", basePort+i)
+		}
+		buf.WriteString(fmt.Sprintf("\n# === WORKER %d: %s ===\n", i, suffix))
 		buf.WriteString(m.generateWorkerYAML(cluster, w, basePort+i))
 	}
 	return buf.String()
@@ -1049,7 +1115,6 @@ func (m *Manager) handleCreateCluster(w http.ResponseWriter, r *http.Request) {
 	cluster.SeqID = seq
 	cluster.ID = id
 	cluster.P2PToken = generateP2PToken(id)
-	// hostNetwork masters share node IP, so each needs a unique port
 	cluster.Portbind = 8080 + seq
 	cluster.Status = "created"
 	m.config.Clusters = append(m.config.Clusters, cluster)
@@ -1081,16 +1146,17 @@ func (m *Manager) handleUpdateCluster(w http.ResponseWriter, r *http.Request) {
 			updated.GatewayPort = m.config.Clusters[i].GatewayPort
 			updated.GatewayHost = m.config.Clusters[i].GatewayHost
 			updated.SeqID = m.config.Clusters[i].SeqID
-			// Preserve token if not provided
 			if updated.P2PToken == "" {
 				updated.P2PToken = m.config.Clusters[i].P2PToken
 			}
-			// Preserve Portbind (frontend may not send it)
 			if updated.Portbind == 0 {
 				updated.Portbind = m.config.Clusters[i].Portbind
 			}
 			if updated.Portbind == 0 {
 				updated.Portbind = 8080 + updated.SeqID
+			}
+			if updated.SavedAnnotations == nil {
+				updated.SavedAnnotations = m.config.Clusters[i].SavedAnnotations
 			}
 			m.config.Clusters[i] = updated
 			m.saveConfig()
@@ -1102,10 +1168,6 @@ func (m *Manager) handleUpdateCluster(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "cluster not found", 404)
 }
 
-// handleScaleWorkers adds or removes workers from a running cluster.
-// POST /api/cluster/scale?id=cluster-2&workers=3
-// If workers > current count: deploys new worker deployments.
-// If workers < current count: deletes excess worker deployments.
 func (m *Manager) handleScaleWorkers(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	if id == "" {
@@ -1141,11 +1203,10 @@ func (m *Manager) handleScaleWorkers(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[%s] scaling workers %d → %d", id, current, target)
 
 	if target > current {
-		// Add workers — NodeName empty, scheduler will place them
 		basePort := 19000 + clusterCopy.SeqID*100
 		for i := current; i < target; i++ {
 			newWorker := WorkerConfig{
-				NodeName: "", // scheduler decides
+				NodeName: "",
 				Replicas: 1,
 			}
 			port := basePort + i
@@ -1175,7 +1236,6 @@ func (m *Manager) handleScaleWorkers(w http.ResponseWriter, r *http.Request) {
 			m.mu.Unlock()
 		}
 	} else if target < current {
-		// Remove excess workers (last ones first)
 		m.mu.Lock()
 		for j := range m.config.Clusters {
 			if m.config.Clusters[j].ID != id {
@@ -1295,10 +1355,9 @@ func (m *Manager) handleSSELogs(w http.ResponseWriter, r *http.Request) {
 
 // ── Experiment Handlers ───────────────────────────────────────────────────────
 
-// ExperimentRequest is the body sent by the UI to start an experiment.
 type ExperimentRequest struct {
 	Name     string                     `json:"name"`
-	Profile  string                     `json:"profile"` // CSV content (base64 or plain)
+	Profile  string                     `json:"profile"`
 	Clusters []experiment.ClusterTarget `json:"clusters"`
 }
 
@@ -1309,7 +1368,6 @@ func (m *Manager) handleStartExperiment(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Inject gateway info from live config (host = IP of masterNode)
 	m.mu.RLock()
 	for i := range req.Clusters {
 		for _, c := range m.config.Clusters {
@@ -1319,11 +1377,27 @@ func (m *Manager) handleStartExperiment(w http.ResponseWriter, r *http.Request) 
 				if req.Clusters[i].Model == "" {
 					req.Clusters[i].Model = "Llama-3.2-3B-Instruct-GGUF"
 				}
-				// Auto-resolve host from master node IP
 				for _, n := range m.config.Nodes {
 					if n.Name == c.MasterNode {
 						req.Clusters[i].GatewayHost = n.Host
 						break
+					}
+				}
+				// Master unpinned ("let scheduler decide") — resolve host via
+				// the actually-running master pod's node.
+				if req.Clusters[i].GatewayHost == "" {
+					out, _ := exec.Command("kubectl", "get", "pod",
+						"-n", "local-ai",
+						"-l", fmt.Sprintf("cluster-id=%s,role=master", c.ID),
+						"-o", "jsonpath={.items[0].spec.nodeName}").Output()
+					podNode := strings.TrimSpace(string(out))
+					if podNode != "" {
+						for _, n := range m.config.Nodes {
+							if n.Name == podNode {
+								req.Clusters[i].GatewayHost = n.Host
+								break
+							}
+						}
 					}
 				}
 			}
@@ -1396,7 +1470,6 @@ func (m *Manager) handleGetNodes(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(m.config.Nodes)
 }
 
-// nodeIP returns the host IP for a node by name. Falls back to empty string.
 func (m *Manager) nodeIP(nodeName string) string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -1408,7 +1481,6 @@ func (m *Manager) nodeIP(nodeName string) string {
 	return ""
 }
 
-// handleRefreshGateway re-discovers the gateway port for a cluster on demand
 func (m *Manager) handleRefreshGateway(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	port, err := discoverGatewayPort(id)
@@ -1459,15 +1531,13 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	// Core UI
 	mux.HandleFunc("/", manager.handleIndex)
 
-	// State & nodes
 	mux.HandleFunc("/api/state", manager.handleGetState)
 	mux.HandleFunc("/api/nodes", manager.handleGetNodes)
 	mux.HandleFunc("/api/nodes/save", manager.handleSaveNodes)
+	mux.HandleFunc("/api/cluster/warmup", manager.handleWarmup)
 
-	// Cluster CRUD + lifecycle
 	mux.HandleFunc("/api/cluster/create", manager.handleCreateCluster)
 	mux.HandleFunc("/api/cluster/update", manager.handleUpdateCluster)
 	mux.HandleFunc("/api/cluster/deploy", manager.handleDeployCluster)
@@ -1479,7 +1549,6 @@ func main() {
 	mux.HandleFunc("/api/cluster/stream", manager.handleSSELogs)
 	mux.HandleFunc("/api/cluster/gateway/refresh", manager.handleRefreshGateway)
 
-	// Experiments
 	mux.HandleFunc("/api/experiment/start", manager.handleStartExperiment)
 	mux.HandleFunc("/api/experiment/list", manager.handleListExperiments)
 	mux.HandleFunc("/api/experiment/status", manager.handleExperimentStatus)

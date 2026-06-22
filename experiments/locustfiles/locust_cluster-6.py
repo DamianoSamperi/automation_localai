@@ -8,10 +8,9 @@ CLUSTER_ID = os.getenv("CLUSTER_ID", "cluster-6")
 
 PROFILE_CSV = """second,users
 0,1
-600,2
-1200,3
-1800,4
-3600,0"""
+200,2
+400,3
+600,0"""
 
 profile = []
 try:
