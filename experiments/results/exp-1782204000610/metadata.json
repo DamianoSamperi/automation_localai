@@ -1,0 +1,43 @@
+{
+  "id": "exp-1782204000610",
+  "name": "warmup-1782204000",
+  "startedAt": "2026-06-23T10:40:00.610267645+02:00",
+  "status": "running",
+  "clusters": [
+    {
+      "clusterId": "cluster-1",
+      "gatewayHost": "192.168.1.99",
+      "gatewayPort": 30373,
+      "model": "qwen_qwen3.5-0.8b",
+      "profileCsv": ""
+    },
+    {
+      "clusterId": "cluster-2",
+      "gatewayHost": "",
+      "gatewayPort": 30492,
+      "model": "qwen_qwen3.5-2b",
+      "profileCsv": ""
+    },
+    {
+      "clusterId": "cluster-3",
+      "gatewayHost": "",
+      "gatewayPort": 30679,
+      "model": "qwen_qwen3.5-0.8b",
+      "profileCsv": ""
+    },
+    {
+      "clusterId": "cluster-4",
+      "gatewayHost": "192.168.1.99",
+      "gatewayPort": 32262,
+      "model": "qwen3.5-27b",
+      "profileCsv": ""
+    },
+    {
+      "clusterId": "cluster-6",
+      "gatewayHost": "192.168.0.201",
+      "gatewayPort": 31081,
+      "model": "qwen_qwen3.5-2b",
+      "profileCsv": ""
+    }
+  ]
+}

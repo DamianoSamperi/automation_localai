@@ -59,12 +59,11 @@
       "port": 8081,
       "workerMemory": 0,
       "model": "qwen_qwen3.5-0.8b",
-      "status": "running",
-      "gatewayPort": 32380,
+      "status": "stopped",
       "savedAnnotations": {
         "master": {
-          "cpu-usage": "148.62",
-          "memory-usage": "4296851456"
+          "cpu-usage": "224.33",
+          "memory-usage": "2179244032"
         }
       },
       "useCustomScheduler": true,
@@ -82,12 +81,11 @@
       "port": 8082,
       "workerMemory": 0,
       "model": "qwen_qwen3.5-2b",
-      "status": "running",
-      "gatewayPort": 31171,
+      "status": "stopped",
       "savedAnnotations": {
         "master": {
-          "cpu-usage": "62.32",
-          "memory-usage": "11126874112"
+          "cpu-usage": "241.55",
+          "memory-usage": "2067664896"
         }
       },
       "useCustomScheduler": true
@@ -104,12 +102,11 @@
       "port": 8083,
       "workerMemory": 0,
       "model": "qwen_qwen3.5-0.8b",
-      "status": "running",
-      "gatewayPort": 30907,
+      "status": "stopped",
       "savedAnnotations": {
         "master": {
-          "cpu-usage": "66.75",
-          "memory-usage": "213581824"
+          "cpu-usage": "27.06",
+          "memory-usage": "2023632896"
         }
       },
       "useCustomScheduler": true
@@ -126,12 +123,11 @@
       "port": 8084,
       "workerMemory": 0,
       "model": "qwen3.5-27b",
-      "status": "running",
-      "gatewayPort": 32379,
+      "status": "stopped",
       "savedAnnotations": {
         "master": {
-          "cpu-usage": "134.26",
-          "memory-usage": "24731045888"
+          "cpu-usage": "102.36",
+          "memory-usage": "624836608"
         }
       },
       "useCustomScheduler": true,
@@ -149,12 +145,11 @@
       "port": 8086,
       "workerMemory": 0,
       "model": "qwen_qwen3.5-2b",
-      "status": "running",
-      "gatewayPort": 30734,
+      "status": "stopped",
       "savedAnnotations": {
         "master": {
-          "cpu-usage": "9.33",
-          "memory-usage": "10927030272"
+          "cpu-usage": "34.68",
+          "memory-usage": "2118688768"
         }
       },
       "useCustomScheduler": true

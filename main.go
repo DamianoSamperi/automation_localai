@@ -308,7 +308,7 @@ func (m *Manager) generateMasterYAML(cluster *ClusterConfig, nodes map[string]*N
 		}
 	}
 
-	image := "localai/localai:latest-aio-cpu"
+	image := "localai/localai:master-aio-cpu"
 	masterArchPath := "/backends/amd64"
 	if masterArch == "arm64" {
 		image = "localai/localai:latest-nvidia-l4t-arm64"
@@ -348,7 +348,11 @@ func (m *Manager) generateMasterYAML(cluster *ClusterConfig, nodes map[string]*N
             nodeSelectorTerms:
               - matchExpressions:
                   - key: node-role.kubernetes.io/control-plane
-                    operator: DoesNotExist`
+                    operator: DoesNotExist
+                  - key: node-role
+                    operator: NotIn
+                    values:
+                      - management`
 	}
 
 	modelEnv := ""
@@ -407,8 +411,6 @@ spec:
           env:
             - name: DEBUG
               value: "true"
-            - name: MODELS
-              value: "[]"
             - name: LOCALAI_BACKENDS_PATH
               valueFrom:
                 fieldRef:
@@ -519,7 +521,7 @@ spec:
 
 // generateWorkerYAML produces the Deployment for one worker replica set.
 func (m *Manager) generateWorkerYAML(cluster *ClusterConfig, worker WorkerConfig, port int) string {
-	image := "localai/localai:latest-cpu"
+	image := "localai/localai:master-cpu"
 	if worker.Arch == "arm64" {
 		image = "localai/localai:latest-nvidia-l4t-arm64"
 	}
@@ -703,6 +705,10 @@ spec:
               - matchExpressions:
                   - key: node-role.kubernetes.io/control-plane
                     operator: DoesNotExist
+                  - key: node-role
+                    operator: NotIn
+                    values:
+                      - management
 `,
 		cluster.ID, workerSuffix,
 		workerLabel, cluster.ID,
