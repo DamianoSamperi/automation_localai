@@ -175,16 +175,16 @@ func main() {
 
 // ── Gateway-based master discovery ───────────────────────────────────────────
 // discore MAster Via Gateaway , finds the gateaway for this cluster, resolve its address
-// The Gateway is labelled cluster-id=<clusterID> by the orchestrator.
+// The Gateway is labelled group=<clusterID> by the orchestrator.
 func discoverMasterViaGateway(k8s *kubernetes.Clientset, gwc *gatewayclient.Clientset, clusterID, myToken string) (string, error) {
 	ctx := context.Background()
 
 	// Find the Gateway object for this cluster
 	gateways, err := gwc.GatewayV1().Gateways(namespace).List(ctx, metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("cluster-id=%s", clusterID),
+		LabelSelector: fmt.Sprintf("group=%s", clusterID),
 	})
 	if err != nil || len(gateways.Items) == 0 {
-		return "", fmt.Errorf("no gateway found for cluster-id=%s", clusterID)
+		return "", fmt.Errorf("no gateway found for group=%s", clusterID)
 	}
 	gw := gateways.Items[0]
 

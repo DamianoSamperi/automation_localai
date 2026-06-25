@@ -41,7 +41,7 @@ metadata:
 spec:
   selector:
     matchExpressions:
-      - key: cluster-id
+      - key: group
         operator: Exists   # only pods that belong to a mini-cluster
   namespaceSelector:
     matchNames:

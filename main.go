@@ -70,8 +70,14 @@ type AppConfig struct {
 	Clusters   []ClusterConfig `json:"clusters"`
 	NextSeqID  int             `json:"nextSeqId"`
 	Prometheus string          `json:"prometheus"`
+	LatencyRules []LatencyRule `json:"latencyRules,omitempty"`
+	NetInterface string        `json:"netInterface,omitempty"`
 }
-
+type LatencyRule struct {
+	SourceNode string `json:"sourceNode"`
+	TargetNode string `json:"targetNode"`
+	DelayMs    int    `json:"delayMs"`
+}
 type Manager struct {
 	mu         sync.RWMutex
 	config     AppConfig
@@ -114,6 +120,9 @@ func NewManager(cfgFile string) *Manager {
 		},
 	)
 	mc.Start()
+	if err := m.ensureLatencyDaemonSet(); err != nil {
+		log.Printf("WARN: latency daemonset: %v", err)
+	}
 
 	return m
 }
@@ -373,7 +382,7 @@ metadata:
   namespace: local-ai
   labels:
     app: %s_master
-    cluster-id: "%s"
+    group: "%s"
     role: master
 spec:
   selector:
@@ -384,7 +393,7 @@ spec:
     metadata:
       labels:
         app: %s_master
-        cluster-id: "%s"
+        group: "%s"
         role: master
       annotations:
 %s        prometheus.io/scrape: "true"
@@ -411,6 +420,8 @@ spec:
           env:
             - name: DEBUG
               value: "true"
+            - name: MODELS
+              value: "[]"
             - name: LOCALAI_BACKENDS_PATH
               valueFrom:
                 fieldRef:
@@ -437,7 +448,7 @@ metadata:
   namespace: local-ai
   labels:
     app: %s_master
-    cluster-id: "%s"
+    group: "%s"
 spec:
   selector:
     app: %s_master
@@ -479,7 +490,7 @@ metadata:
   name: gateway-%s
   namespace: local-ai
   labels:
-    cluster-id: "%s"
+    group: "%s"
     app: %s_gateway
 spec:
   gatewayClassName: istio
@@ -497,7 +508,7 @@ metadata:
   name: route-%s
   namespace: local-ai
   labels:
-    cluster-id: "%s"
+    group: "%s"
 spec:
   parentRefs:
     - name: gateway-%s
@@ -545,7 +556,6 @@ func (m *Manager) generateWorkerYAML(cluster *ClusterConfig, worker WorkerConfig
 	if cluster.UseCustomScheduler {
 		schedulerLine = "      schedulerName: scheduler-plugins-scheduler"
 	}
-
 	workerArchPath := "/backends/amd64"
 	if worker.Arch == "arm64" {
 		workerArchPath = "/backends/arm64"
@@ -610,7 +620,7 @@ func (m *Manager) generateWorkerYAML(cluster *ClusterConfig, worker WorkerConfig
           image: %s
           imagePullPolicy: IfNotPresent
           args:
-            - p2p-worker
+            - $(WORKER_ARGS)
             - p2p-llama-cpp-rpc
           env:
             - name: DEBUG
@@ -625,6 +635,10 @@ func (m *Manager) generateWorkerYAML(cluster *ClusterConfig, worker WorkerConfig
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.annotations['localai-backends-path']
+            - name: WORKER_ARGS
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['localai-worker-args']
           volumeMounts:
             - name: lxcfs-proc-meminfo
               mountPath: /proc/meminfo
@@ -643,10 +657,13 @@ func (m *Manager) generateWorkerYAML(cluster *ClusterConfig, worker WorkerConfig
           persistentVolumeClaim:
             claimName: localai-backend-all-pvc`
 
-	workerSavedAnn := ""
+    workerSavedAnn := ""
 	if cluster.SavedAnnotations != nil {
 		workerSavedAnn = buildAnnotationBlock(cluster.SavedAnnotations[workerSuffix], "        ")
 	}
+
+	// annotation di default per gli args — il custom scheduler la sovrascrive
+	workerArgsAnnotation := `        localai-worker-args: "p2p-worker p2p-llama-cpp-rpc"`
 
 	return fmt.Sprintf(`apiVersion: apps/v1
 kind: Deployment
@@ -655,7 +672,7 @@ metadata:
   namespace: local-ai
   labels:
     app: %s
-    cluster-id: "%s"
+    group: "%s"
     role: worker
 spec:
   replicas: %d
@@ -666,12 +683,13 @@ spec:
     metadata:
       labels:
         app: %s
-        cluster-id: "%s"
+        group: "%s"
         role: worker
       annotations:
 %s        prometheus.io/scrape: "true"
         prometheus.io/port: "2112"
         localai-backends-path: "%s"
+%s
     spec:
 %s
       hostNetwork: true
@@ -717,6 +735,7 @@ spec:
 		workerLabel, cluster.ID,
 		workerSavedAnn,
 		workerArchPath,
+		workerArgsAnnotation, 
 		schedulerLine,
 		nodeSelector,
 		containerSpec,
@@ -806,7 +825,7 @@ func (m *Manager) EnsureSharedPVs() {
 func discoverGatewayPort(clusterID string) (int, error) {
 	out, err := exec.Command("kubectl", "get", "service",
 		"-n", "local-ai",
-		"-l", fmt.Sprintf("cluster-id=%s", clusterID),
+		"-l", fmt.Sprintf("group=%s", clusterID),
 		"-o", "jsonpath={.items[*].spec.ports[0].nodePort}",
 	).Output()
 	if err != nil {
@@ -981,7 +1000,7 @@ func (m *Manager) undeployCluster(clusterID string) error {
 	args := []string{
 		"delete", "deployment,service,gateway,httproute,pvc",
 		"-n", "local-ai",
-		"-l", fmt.Sprintf("cluster-id=%s", clusterID),
+		"-l", fmt.Sprintf("group=%s", clusterID),
 		"--ignore-not-found=true",
 	}
 	cmd := exec.Command("kubectl", args...)
@@ -1086,7 +1105,44 @@ func (m *Manager) generateYAMLPreview(clusterID string) string {
 	}
 	return buf.String()
 }
+// ── Deploy / Undeploy All ─────────────────────────────────────────────────────
 
+func (m *Manager) handleDeployAll(w http.ResponseWriter, r *http.Request) {
+	m.mu.RLock()
+	var ids []string
+	for _, c := range m.config.Clusters {
+		if c.Status != "running" && c.Status != "deploying" {
+			ids = append(ids, c.ID)
+		}
+	}
+	m.mu.RUnlock()
+
+	for _, id := range ids {
+		go m.deployCluster(id)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"deploying": ids})
+}
+
+func (m *Manager) handleUndeployAll(w http.ResponseWriter, r *http.Request) {
+	m.mu.RLock()
+	var ids []string
+	for _, c := range m.config.Clusters {
+		if c.Status == "running" || c.Status == "deploying" {
+			ids = append(ids, c.ID)
+		}
+	}
+	m.mu.RUnlock()
+
+	var errors []string
+	for _, id := range ids {
+		if err := m.undeployCluster(id); err != nil {
+			errors = append(errors, id+": "+err.Error())
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"undeployed": ids, "errors": errors})
+}
 // ── HTTP Handlers ─────────────────────────────────────────────────────────────
 
 func (m *Manager) handleGetState(w http.ResponseWriter, r *http.Request) {
@@ -1358,6 +1414,190 @@ func (m *Manager) handleSSELogs(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "data: [DONE]\n\n")
 	flusher.Flush()
 }
+// ── Latency Injection ─────────────────────────────────────────────────────────
+
+func (m *Manager) netIface() string {
+	if m.config.NetInterface != "" {
+		return m.config.NetInterface
+	}
+	return "eth0"
+}
+
+func (m *Manager) ensureLatencyDaemonSet() error {
+	yaml := `apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: latency-injector
+  namespace: local-ai
+spec:
+  selector:
+    matchLabels:
+      app: latency-injector
+  template:
+    metadata:
+      labels:
+        app: latency-injector
+    spec:
+      hostNetwork: true
+      hostPID: true
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: tc
+          image: nicolaka/netshoot:latest
+          command: ["sleep", "infinity"]
+          securityContext:
+            privileged: true
+          resources:
+            limits:
+              memory: "64Mi"
+              cpu: "50m"`
+	cmd := exec.Command("kubectl", "apply", "-f", "-")
+	cmd.Stdin = strings.NewReader(yaml)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("daemonset error: %s", string(out))
+	}
+	return nil
+}
+
+func (m *Manager) nodeExec(nodeName string, cmd string) (string, error) {
+	podBytes, err := exec.Command("kubectl", "get", "pods",
+		"-n", "local-ai",
+		"-l", "app=latency-injector",
+		"--field-selector", "spec.nodeName="+nodeName,
+		"-o", "jsonpath={.items[0].metadata.name}",
+	).Output()
+	if err != nil || strings.TrimSpace(string(podBytes)) == "" {
+		return "", fmt.Errorf("no latency-injector pod on node %s", nodeName)
+	}
+
+	podName := strings.TrimSpace(string(podBytes))
+	log.Printf("[Latency] exec on %s (pod %s): %s", nodeName, podName, cmd)
+
+	out, err := exec.Command("kubectl", "exec", "-n", "local-ai",
+		podName, "--", "sh", "-c", cmd,
+	).CombinedOutput()
+	if err != nil {
+		log.Printf("[Latency] exec error on %s: %s | output: %s", nodeName, err, string(out))
+	}
+	return string(out), err
+}
+
+func (m *Manager) applyNodeLatencies(node NodeConfig, rules []LatencyRule) error {
+	iface := m.netIface()
+	m.nodeExec(node.Name, fmt.Sprintf("tc qdisc del dev %s root 2>/dev/null; true", iface))
+
+	if len(rules) == 0 {
+		return nil
+	}
+
+	bands := len(rules) + 3
+	if bands > 16 {
+		bands = 16
+	}
+
+	cmds := []string{
+		fmt.Sprintf("tc qdisc add dev %s root handle 1: prio bands %d", iface, bands),
+	}
+
+	for i, rule := range rules {
+		band := i + 3
+		if band >= bands {
+			break
+		}
+		targetIP := m.nodeIP(rule.TargetNode)
+		if targetIP == "" {
+			continue
+		}
+		cmds = append(cmds,
+			fmt.Sprintf("tc qdisc add dev %s parent 1:%d handle %d0: netem delay %dms", iface, band, band, rule.DelayMs),
+			fmt.Sprintf("tc filter add dev %s protocol ip parent 1:0 prio %d u32 match ip dst %s/32 flowid 1:%d", iface, band, targetIP, band),
+		)
+	}
+
+	_, err := m.nodeExec(node.Name, strings.Join(cmds, " && "))
+	return err
+}
+
+func (m *Manager) handleApplyLatency(w http.ResponseWriter, r *http.Request) {
+	var rules []LatencyRule
+	if err := json.NewDecoder(r.Body).Decode(&rules); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+
+	m.mu.Lock()
+	m.config.LatencyRules = rules
+	m.saveConfig()
+	nodes := make([]NodeConfig, len(m.config.Nodes))
+	copy(nodes, m.config.Nodes)
+	m.mu.Unlock()
+
+	bySource := map[string][]LatencyRule{}
+	for _, r := range rules {
+		bySource[r.SourceNode] = append(bySource[r.SourceNode], r)
+	}
+
+	var errors []string
+	for _, node := range nodes {
+		if err := m.applyNodeLatencies(node, bySource[node.Name]); err != nil {
+			errors = append(errors, node.Name+": "+err.Error())
+		} else {
+			log.Printf("[Latency] %s: %d rules applied", node.Name, len(bySource[node.Name]))
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"status": "applied", "rules": len(rules), "errors": errors})
+}
+
+func (m *Manager) handleClearLatency(w http.ResponseWriter, r *http.Request) {
+	m.mu.Lock()
+	m.config.LatencyRules = nil
+	m.saveConfig()
+	nodes := make([]NodeConfig, len(m.config.Nodes))
+	copy(nodes, m.config.Nodes)
+	m.mu.Unlock()
+
+	iface := m.netIface()
+	var errors []string
+	for _, node := range nodes {
+		if _, err := m.nodeExec(node.Name, fmt.Sprintf("tc qdisc del dev %s root 2>/dev/null; true", iface)); err != nil {
+			errors = append(errors, node.Name+": "+err.Error())
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"status": "cleared", "errors": errors})
+}
+
+func (m *Manager) handleGetLatency(w http.ResponseWriter, r *http.Request) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"rules":        m.config.LatencyRules,
+		"netInterface": m.netIface(),
+	})
+}
+
+func (m *Manager) handleSetInterface(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Interface string `json:"interface"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	m.mu.Lock()
+	m.config.NetInterface = req.Interface
+	m.saveConfig()
+	m.mu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
 
 // ── Experiment Handlers ───────────────────────────────────────────────────────
 
@@ -1379,6 +1619,7 @@ func (m *Manager) handleStartExperiment(w http.ResponseWriter, r *http.Request) 
 		for _, c := range m.config.Clusters {
 			if c.ID == req.Clusters[i].ClusterID {
 				req.Clusters[i].GatewayPort = c.GatewayPort
+				req.Clusters[i].Portbind = c.Portbind  
 				req.Clusters[i].Model = c.Model
 				if req.Clusters[i].Model == "" {
 					req.Clusters[i].Model = "Llama-3.2-3B-Instruct-GGUF"
@@ -1394,7 +1635,7 @@ func (m *Manager) handleStartExperiment(w http.ResponseWriter, r *http.Request) 
 				if req.Clusters[i].GatewayHost == "" {
 					out, _ := exec.Command("kubectl", "get", "pod",
 						"-n", "local-ai",
-						"-l", fmt.Sprintf("cluster-id=%s,role=master", c.ID),
+						"-l", fmt.Sprintf("group=%s,role=master", c.ID),
 						"-o", "jsonpath={.items[0].spec.nodeName}").Output()
 					podNode := strings.TrimSpace(string(out))
 					if podNode != "" {
@@ -1548,6 +1789,8 @@ func main() {
 	mux.HandleFunc("/api/cluster/update", manager.handleUpdateCluster)
 	mux.HandleFunc("/api/cluster/deploy", manager.handleDeployCluster)
 	mux.HandleFunc("/api/cluster/undeploy", manager.handleUndeployCluster)
+	mux.HandleFunc("/api/cluster/deploy-all", manager.handleDeployAll)
+	mux.HandleFunc("/api/cluster/undeploy-all", manager.handleUndeployAll)
 	mux.HandleFunc("/api/cluster/delete", manager.handleDeleteCluster)
 	mux.HandleFunc("/api/cluster/scale", manager.handleScaleWorkers)
 	mux.HandleFunc("/api/cluster/workers", manager.handleGetClusterWorkers)
@@ -1561,6 +1804,11 @@ func main() {
 	mux.HandleFunc("/api/experiment/stream", manager.handleExperimentSSE)
 	mux.HandleFunc("/api/experiment/report", manager.handleGetReport)
 	mux.HandleFunc("/api/experiment/cancel", manager.handleCancelExperiment)
+	mux.HandleFunc("/api/latency/apply", manager.handleApplyLatency)
+	mux.HandleFunc("/api/latency/clear", manager.handleClearLatency)
+	mux.HandleFunc("/api/latency/get", manager.handleGetLatency)
+	mux.HandleFunc("/api/latency/interface", manager.handleSetInterface)
+
 
 	port := ":8090"
 	fmt.Printf("LocalAI Orchestrator running → http://localhost%s\n", port)

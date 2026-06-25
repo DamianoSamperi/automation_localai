@@ -103,11 +103,11 @@ status:
 
 .PHONY: logs-master
 logs-master:
-	kubectl logs -n local-ai -l cluster-id=$(CLUSTER),role=master --all-containers -f
+	kubectl logs -n local-ai -l group=$(CLUSTER),role=master --all-containers -f
 
 .PHONY: logs-workers
 logs-workers:
-	kubectl logs -n local-ai -l cluster-id=$(CLUSTER),role=worker --all-containers -f
+	kubectl logs -n local-ai -l group=$(CLUSTER),role=worker --all-containers -f
 
 .PHONY: clean-all
 clean-all:
@@ -118,7 +118,7 @@ clean-all:
 .PHONY: clean-cluster
 clean-cluster:
 	kubectl delete deployment,service,gateway,httproute -n local-ai \
-		-l cluster-id=$(CLUSTER) --ignore-not-found=true
+		-l group=$(CLUSTER) --ignore-not-found=true
 	kubectl delete configmap localai-worker-registry -n local-ai --ignore-not-found=true
 
 # ═══════════════════════════════════════════════════════

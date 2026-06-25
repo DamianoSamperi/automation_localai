@@ -50,8 +50,8 @@
     {
       "seqId": 1,
       "id": "cluster-1",
-      "name": "cluster-orin-3-workers",
-      "masterNode": "jetsonorigin",
+      "name": "cluster-gpu-3-workers",
+      "masterNode": "",
       "workers": [],
       "workerCount": 3,
       "p2pToken": "b3RwOgogIGRodDoKICAgIGludGVydmFsOiAzNjAKICAgIGtleTogeml5Z0JiV2JnUHdKVjFFWWdhdjVmeGw1ZGoyZURGdmFaQXYxRlZNYVA2UgogICAgbGVuZ3RoOiA0MwogIGNyeXB0bzoKICAgIGludGVydmFsOiA5MDAwCiAgICBrZXk6IEdOTUtwOEhjQ045bmtNZkFpR1BtWHNNTzF2RUVSWVdiekxiTHFxNkZodVoKICAgIGxlbmd0aDogNDMKcm9vbTogZVRucHlaU0tjUUkwNnFXMTEwYjJ4NHRCVHlGOThqb1lrSjVMZlgwbDIzbwpyZW5kZXp2b3VzOiBabTU3bTlVbmtKTTR3RThhU3NyRjhiVEJVbTZCYnNEaklDWUoxRnhjQnNiCm1kbnM6IEdodUJIeHFkZFpMUUx3djIwcUp4ZVYzWFVRT0ZiQnJOWmcxSUlJZkhzejkKbWF4X21lc3NhZ2Vfc2l6ZTogMjA5NzE1MjAK",
@@ -59,11 +59,12 @@
       "port": 8081,
       "workerMemory": 0,
       "model": "qwen_qwen3.5-0.8b",
-      "status": "stopped",
+      "status": "running",
+      "gatewayPort": 30124,
       "savedAnnotations": {
         "master": {
-          "cpu-usage": "224.33",
-          "memory-usage": "2179244032"
+          "cpu-usage": "45.41",
+          "memory-usage": "4976295936"
         }
       },
       "useCustomScheduler": true,
@@ -81,11 +82,12 @@
       "port": 8082,
       "workerMemory": 0,
       "model": "qwen_qwen3.5-2b",
-      "status": "stopped",
+      "status": "running",
+      "gatewayPort": 31198,
       "savedAnnotations": {
         "master": {
-          "cpu-usage": "241.55",
-          "memory-usage": "2067664896"
+          "cpu-usage": "22.25",
+          "memory-usage": "309297152"
         }
       },
       "useCustomScheduler": true
@@ -102,11 +104,12 @@
       "port": 8083,
       "workerMemory": 0,
       "model": "qwen_qwen3.5-0.8b",
-      "status": "stopped",
+      "status": "running",
+      "gatewayPort": 30906,
       "savedAnnotations": {
         "master": {
-          "cpu-usage": "27.06",
-          "memory-usage": "2023632896"
+          "cpu-usage": "24.28",
+          "memory-usage": "1388199936"
         }
       },
       "useCustomScheduler": true
@@ -114,8 +117,8 @@
     {
       "seqId": 4,
       "id": "cluster-4",
-      "name": "cluster-orin-model-large",
-      "masterNode": "jetsonorigin",
+      "name": "cluster-gpu-model-large",
+      "masterNode": "",
       "workers": [],
       "workerCount": 2,
       "p2pToken": "b3RwOgogIGRodDoKICAgIGludGVydmFsOiAzNjAKICAgIGtleTogZHI5UTR0ZXM2OFpEWjZySXhNbGNuQnpVa2VfWFRDb0VleHFZQzRUSS1PeQogICAgbGVuZ3RoOiA0MwogIGNyeXB0bzoKICAgIGludGVydmFsOiA5MDAwCiAgICBrZXk6IFRXMy1oTUsydnRUNzNRM3c4RWJETms3UXBkYzFhRlo3WFVlSG5VWFJLbWsKICAgIGxlbmd0aDogNDMKcm9vbTogUENuaFRhMEVXMlY2VGUyMGVHc1ZoMko5X1hKel9ICnJlbmRlenZvdXM6IHYwVkc5UlQ5aDh4RVp0dDhON2hGaG4tT1QxRk9OOAptZG5zOiBMb2NhbEFJLVAyUC1jbHVzdGVyLTQKbWF4X21lc3NhZ2Vfc2l6ZTogMjA5NzE1MjAK",
@@ -123,11 +126,12 @@
       "port": 8084,
       "workerMemory": 0,
       "model": "qwen3.5-27b",
-      "status": "stopped",
+      "status": "running",
+      "gatewayPort": 30596,
       "savedAnnotations": {
         "master": {
-          "cpu-usage": "102.36",
-          "memory-usage": "624836608"
+          "cpu-usage": "115.71",
+          "memory-usage": "3924570112"
         }
       },
       "useCustomScheduler": true,
@@ -137,7 +141,7 @@
       "seqId": 6,
       "id": "cluster-6",
       "name": "Cluster (Master amd)(2 worker)",
-      "masterNode": "ds-cluster-01-worker-01",
+      "masterNode": "",
       "workers": [],
       "workerCount": 2,
       "p2pToken": "b3RwOgogIGRodDoKICAgIGludGVydmFsOiAzNjAKICAgIGtleTogdGoyQmJaTTJuY3M4ZTFxSTlycHRMSHMwNTJWNEtUWFBuaDRkaWowcDhRSQogICAgbGVuZ3RoOiA0MwogIGNyeXB0bzoKICAgIGludGVydmFsOiA5MDAwCiAgICBrZXk6IF90bUZwUGRfR29KSDZFY2lGczZmbXBpS0xmblRDcktNV3FwYmh3Uy13dnkKICAgIGxlbmd0aDogNDMKcm9vbTogbFNWbURoUjh0SXR3YktGRDNGN3g1TkpDcHk5SlNUCnJlbmRlenZvdXM6IDdLSXlqaGIwRUdrb2NWSkNrdFdya01DekJfalkzSQptZG5zOiBMb2NhbEFJLVAyUC1jbHVzdGVyLTYKbWF4X21lc3NhZ2Vfc2l6ZTogMjA5NzE1MjAK",
@@ -145,11 +149,12 @@
       "port": 8086,
       "workerMemory": 0,
       "model": "qwen_qwen3.5-2b",
-      "status": "stopped",
+      "status": "running",
+      "gatewayPort": 30502,
       "savedAnnotations": {
         "master": {
-          "cpu-usage": "34.68",
-          "memory-usage": "2118688768"
+          "cpu-usage": "54.75",
+          "memory-usage": "359780352"
         }
       },
       "useCustomScheduler": true

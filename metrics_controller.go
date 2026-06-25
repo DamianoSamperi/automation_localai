@@ -192,7 +192,13 @@ func (mc *MetricsController) annotateDeployments(cluster ClusterConfig) {
 			masterAnn["traffic."+workerApp] = fmt.Sprintf("%.0f", tx)
 		}
 	}
-
+	// gateway-traffic: requests/s hitting this specific master via Istio gateway
+	gwRPS := mc.scalar(fmt.Sprintf(
+		`sum(rate(istio_requests_total{destination_service_name="local-ai-%s",destination_service_namespace="local-ai"}[60s]))`,
+		cluster.ID))
+	if gwRPS >= 0 {
+		masterAnn["gateway-traffic"] = fmt.Sprintf("%.2f", gwRPS)
+	}
 	if len(masterAnn) > 0 {
 		mc.annotateDeployment_("local-ai", "local-ai-"+cluster.ID, masterAnn)
 	}
@@ -220,7 +226,6 @@ func (mc *MetricsController) annotateDeployments(cluster ClusterConfig) {
 		if ramW >= 0 {
 			wAnn["memory-usage"] = fmt.Sprintf("%.0f", ramW)
 		}
-
 		// traffic toward master in bytes/s
 		tx := mc.scalar(fmt.Sprintf(
 			`sum(rate(node_network_transmit_bytes_total{instance="%s",device!="lo"}[60s]))`,

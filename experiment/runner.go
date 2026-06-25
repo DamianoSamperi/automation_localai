@@ -26,12 +26,12 @@ import (
 // ClusterTarget describes one master to test during an experiment.
 type ClusterTarget struct {
 	ClusterID   string `json:"clusterId"`
-	GatewayHost string `json:"gatewayHost"` // IP del master node, auto-resolved
+	GatewayHost string `json:"gatewayHost"`
 	GatewayPort int    `json:"gatewayPort"`
+	Portbind    int    `json:"portbind"`  // direct master port (8080+seqId)
 	Model       string `json:"model"`
-	ProfileCSV  string `json:"profileCsv"` // content of the load profile CSV
+	ProfileCSV  string `json:"profileCsv"`
 }
-
 // Experiment is the runtime state of one experiment run.
 type Experiment struct {
 	ID         string          `json:"id"`
@@ -216,7 +216,44 @@ func (m *Manager) ReportPath(id string) string {
 	}
 	return exp.ReportFile
 }
+func warmupCluster(ct ClusterTarget, portbind int) error {
+	client := &http.Client{Timeout: 10 * time.Minute}
 
+	host := ct.GatewayHost
+	port := ct.GatewayPort
+	if port == 0 {
+		port = portbind
+	}
+	if host == "" {
+		return fmt.Errorf("no gateway host resolved for %s", ct.ClusterID)
+	}
+
+	url := fmt.Sprintf("http://%s:%d/v1/chat/completions", host, port)
+
+	body := fmt.Sprintf(`{
+		"model": "%s",
+		"messages": [{"role":"user","content":"hello"}],
+		"max_tokens": 5
+	}`, ct.Model)
+
+	log.Printf("[Warmup] %s POST %s", ct.ClusterID, url)
+	log.Printf("[Warmup] %s Body: %s", ct.ClusterID, body)
+
+	resp, err := client.Post(url, "application/json", strings.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("warmup request error: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	log.Printf("[Warmup] %s Status: %d", ct.ClusterID, resp.StatusCode)
+	log.Printf("[Warmup] %s Response: %s", ct.ClusterID, string(respBody))
+
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("warmup returned %d: %s", resp.StatusCode, string(respBody))
+	}
+	return nil
+}
 // ── Internal run loop ─────────────────────────────────────────────────────────
 
 func (m *Manager) run(exp *Experiment, globalProfile string) {
@@ -260,7 +297,16 @@ func (m *Manager) run(exp *Experiment, globalProfile string) {
 		addLog(fmt.Sprintf("Locustfile ready for %s → %s:%d model=%s",
 			ct.ClusterID, ct.GatewayHost, ct.GatewayPort, ct.Model))
 	}
-
+	// 1b. Warm up each cluster (force model loading before load test)
+	addLog("Warming up clusters (loading models)...")
+	for _, ct := range exp.Clusters {
+		addLog(fmt.Sprintf("[%s] Warming up model %s ...", ct.ClusterID, ct.Model))
+		if err := warmupCluster(ct, ct.Portbind); err != nil {
+			addLog(fmt.Sprintf("[%s] ⚠ Warmup failed: %v", ct.ClusterID, err))
+		} else {
+			addLog(fmt.Sprintf("[%s] ✅ Model loaded", ct.ClusterID))
+		}
+	}
 	// 2. Run all locust processes in parallel as Kubernetes Jobs
 	addLog("Starting parallel load tests (inside cluster)...")
 	startTime := time.Now().UTC()
@@ -312,7 +358,7 @@ metadata:
   name: %s
   namespace: local-ai
   labels:
-    cluster-id: "%s"
+    group: "%s"
     role: locust
     experiment: "%s"
 spec:

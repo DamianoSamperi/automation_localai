@@ -30,11 +30,11 @@ Ogni mini-cluster genera:
 
 | Risorsa K8s | Nome | Label |
 |---|---|---|
-| Deployment master | `local-ai-<clusterID>` | `cluster-id=<id>` `app=<id>_master` `role=master` |
-| Service ClusterIP | `local-ai-<clusterID>` | `cluster-id=<id>` |
-| Deployment worker | `localai-worker-<clusterID>-<nodeName>` | `cluster-id=<id>` `app=<id>_worker_<nodeName>` `role=worker` |
-| Gateway (Istio) | `gateway-<clusterID>` | `cluster-id=<id>` |
-| HTTPRoute | `route-<clusterID>` | `cluster-id=<id>` |
+| Deployment master | `local-ai-<clusterID>` | `group=<id>` `app=<id>_master` `role=master` |
+| Service ClusterIP | `local-ai-<clusterID>` | `group=<id>` |
+| Deployment worker | `localai-worker-<clusterID>-<nodeName>` | `group=<id>` `app=<id>_worker_<nodeName>` `role=worker` |
+| Gateway (Istio) | `gateway-<clusterID>` | `group=<id>` |
+| HTTPRoute | `route-<clusterID>` | `group=<id>` |
 
 Le label `app` seguono il formato `<clusterID>_master` / `<clusterID>_worker_<nodeName>` per lo scraping Istio per-cluster in Prometheus.
 
@@ -139,7 +139,7 @@ Il report include quattro sezioni navigabili:
 
 ## Metriche Prometheus raccolte
 
-Per ogni cluster, usando label `cluster-id` e `app`:
+Per ogni cluster, usando label `group` e `app`:
 
 | Nome | Query base |
 |---|---|
@@ -201,7 +201,7 @@ make clean-experiments           # Rimuove risultati esperimenti
 ## Gateway discovery — come funziona
 
 Il sidecar trova il master con questo flusso:
-1. Cerca il `Gateway` con label `cluster-id=<CLUSTER_ID>` (env var iniettata dall'orchestratore)
+1. Cerca il `Gateway` con label `group=<CLUSTER_ID>` (env var iniettata dall'orchestratore)
 2. Legge `status.addresses` del Gateway
 3. Risolve la NodePort dal Service Istio associato
 4. Verifica il P2P token (`/api/p2p/token`) per confermare il match

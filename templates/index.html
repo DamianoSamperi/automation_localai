@@ -153,6 +153,7 @@ tr:last-child td { border: none; }
   <nav>
     <a class="active" onclick="showPage('clusters')" data-page="clusters"><span>🏗️</span> Clusters</a>
     <a onclick="showPage('nodes')" data-page="nodes"><span>🖥️</span> Nodes</a>
+    <a onclick="showPage('latency')" data-page="latency"><span>🌐</span> Latency</a>
     <a onclick="showPage('experiments')" data-page="experiments"><span>🧪</span> Experiments</a>
     <a onclick="showPage('reports')" data-page="reports"><span>📊</span> Reports</a>
   </nav>
@@ -163,12 +164,16 @@ tr:last-child td { border: none; }
 
 <!-- ── CLUSTERS ─────────────────────────────────────────────────── -->
 <div id="page-clusters" class="page active">
-  <div class="page-header">
-    <h2>Mini-Clusters</h2>
+<div class="page-header">
+  <h2>Mini-Clusters</h2>
+  <div style="display:flex;gap:.5rem">
     <button class="btn btn-primary" onclick="openCreateModal()">＋ New Cluster</button>
+    <button class="btn btn-success" onclick="deployAll()">🚀 Deploy All</button>
+    <button class="btn btn-amber" onclick="undeployAll()">⏹ Undeploy All</button>
     <button class="btn btn-amber" onclick="openWarmupModal()">🔥 Warm-up</button>
     <button class="btn btn-amber" onclick="warmupAll()">🔥 Warm-up All</button>
   </div>
+</div>
   <div id="clusters-list">
     <p style="color:var(--muted)">Loading...</p>
   </div>
@@ -187,7 +192,42 @@ tr:last-child td { border: none; }
     </table>
   </div>
 </div>
-
+<!-- ── LATENCY ──────────────────────────────────────────────────── -->
+<div id="page-latency" class="page">
+  <div class="page-header">
+    <h2>Network Latency Injection</h2>
+    <div style="display:flex;gap:.5rem">
+      <button class="btn btn-primary" onclick="applyLatency()">✓ Apply All</button>
+      <button class="btn btn-danger" onclick="clearLatency()">✕ Clear All</button>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:1rem">
+    <div style="display:flex;gap:1rem;align-items:flex-end">
+      <div class="form-group" style="margin:0;max-width:200px">
+        <label>Network Interface</label>
+        <input id="net-iface" value="eth0" placeholder="eth0">
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="saveInterface()" style="margin-bottom:2px">Save</button>
+      <span style="color:var(--muted);font-size:.75rem;margin-bottom:.4rem">Interface used on all nodes for tc commands</span>
+    </div>
+  </div>
+  <div class="card">
+    <p style="color:var(--muted);font-size:.8rem;margin-bottom:.75rem">
+      Set delay (ms) between node pairs. Empty or 0 = no injected latency. Symmetric by default — editing A→B also sets B→A.
+    </p>
+    <div style="overflow-x:auto">
+      <table id="latency-matrix">
+        <thead><tr><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div style="margin-top:.75rem">
+      <label style="font-size:.8rem">
+        <input type="checkbox" id="latency-symmetric" checked> Symmetric (A→B = B→A)
+      </label>
+    </div>
+  </div>
+</div>
 <!-- ── EXPERIMENTS ──────────────────────────────────────────────── -->
 <div id="page-experiments" class="page">
   <div class="page-header">
@@ -391,7 +431,151 @@ tr:last-child td { border: none; }
 <script>
 // ── State ─────────────────────────────────────────────────────────
 let state = { nodes: [], clusters: [], nextSeqId: 0 };
+// ── Deploy / Undeploy All ─────────────────────────────────────────
+async function deployAll() {
+  if (!confirm('Deploy ALL non-running clusters?')) return;
+  const res = await fetch('/api/cluster/deploy-all', { method: 'POST' });
+  if (res.ok) {
+    const d = await res.json();
+    toast(`Deploying ${(d.deploying||[]).length} cluster(s) ✓`);
+  } else {
+    toast('Error: ' + await res.text(), true);
+  }
+  await refresh();
+}
 
+async function undeployAll() {
+  if (!confirm('Undeploy ALL running clusters?')) return;
+  const res = await fetch('/api/cluster/undeploy-all', { method: 'POST' });
+  if (res.ok) {
+    const d = await res.json();
+    toast(`Undeployed ${(d.undeployed||[]).length} cluster(s) ✓`);
+    if (d.errors && d.errors.length) console.warn('Undeploy errors:', d.errors);
+  } else {
+    toast('Error: ' + await res.text(), true);
+  }
+  await refresh();
+}
+
+// ── Latency Injection ─────────────────────────────────────────────
+function renderLatencyMatrix() {
+  const nodes = state.nodes || [];
+  const table = document.getElementById('latency-matrix');
+  if (!nodes.length) {
+    table.innerHTML = '<tr><td style="color:var(--muted)">No nodes configured</td></tr>';
+    return;
+  }
+
+  // Build lookup from saved rules
+  const ruleMap = {};
+  (state.latencyRules || []).forEach(r => {
+    ruleMap[r.sourceNode + '→' + r.targetNode] = r.delayMs;
+  });
+
+  let html = '<thead><tr><th style="min-width:140px">From \\ To</th>';
+  nodes.forEach(n => { html += `<th style="min-width:90px;text-align:center;font-size:.75rem">${n.name.replace('ds-cluster-01-','')}</th>`; });
+  html += '</tr></thead><tbody>';
+
+  nodes.forEach(src => {
+    html += `<tr><td style="font-size:.8rem;font-weight:600">${src.name.replace('ds-cluster-01-','')}</td>`;
+    nodes.forEach(dst => {
+      if (src.name === dst.name) {
+        html += '<td style="text-align:center;color:var(--border)">—</td>';
+      } else {
+        const val = ruleMap[src.name + '→' + dst.name] || '';
+        html += `<td><input type="number" min="0" step="1" placeholder="0"
+          value="${val}" style="width:70px;text-align:center;padding:.3rem"
+          data-src="${src.name}" data-dst="${dst.name}"
+          onchange="onLatencyChange(this)"></td>`;
+      }
+    });
+    html += '</tr>';
+  });
+  html += '</tbody>';
+  table.innerHTML = html;
+}
+
+function onLatencyChange(input) {
+  const sym = document.getElementById('latency-symmetric').checked;
+  if (!sym) return;
+  const src = input.dataset.src;
+  const dst = input.dataset.dst;
+  const val = input.value;
+  // Find reverse input
+  const rev = document.querySelector(`input[data-src="${dst}"][data-dst="${src}"]`);
+  if (rev) rev.value = val;
+}
+
+function collectLatencyRules() {
+  const inputs = document.querySelectorAll('#latency-matrix input[type=number]');
+  const rules = [];
+  inputs.forEach(inp => {
+    const ms = parseInt(inp.value);
+    if (ms > 0) {
+      rules.push({
+        sourceNode: inp.dataset.src,
+        targetNode: inp.dataset.dst,
+        delayMs: ms,
+      });
+    }
+  });
+  return rules;
+}
+
+async function applyLatency() {
+  const rules = collectLatencyRules();
+  if (rules.length === 0 && !confirm('No latency rules set. This will clear all injected latency. Continue?')) return;
+
+  toast('Applying latency rules...');
+  const res = await fetch('/api/latency/apply', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(rules),
+  });
+  if (res.ok) {
+    const d = await res.json();
+    if (d.errors && d.errors.length) {
+      toast(`Applied with ${d.errors.length} error(s) — check console`, true);
+      console.warn('Latency errors:', d.errors);
+    } else {
+      toast(`${d.rules} latency rule(s) applied ✓`);
+    }
+    state.latencyRules = rules;
+  } else {
+    toast('Error: ' + await res.text(), true);
+  }
+}
+
+async function clearLatency() {
+  if (!confirm('Clear ALL injected latency on all nodes?')) return;
+  const res = await fetch('/api/latency/clear', { method: 'POST' });
+  if (res.ok) {
+    toast('All latency cleared ✓');
+    state.latencyRules = [];
+    renderLatencyMatrix();
+  } else {
+    toast('Error: ' + await res.text(), true);
+  }
+}
+
+async function saveInterface() {
+  const iface = document.getElementById('net-iface').value || 'eth0';
+  await fetch('/api/latency/interface', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({interface: iface}),
+  });
+  toast('Interface saved: ' + iface);
+}
+
+async function loadLatencyState() {
+  try {
+    const res = await fetch('/api/latency/get');
+    const d = await res.json();
+    state.latencyRules = d.rules || [];
+    document.getElementById('net-iface').value = d.netInterface || 'eth0';
+  } catch(e) {}
+}
 // ── Init ──────────────────────────────────────────────────────────
 async function init() {
   await refresh();
@@ -404,6 +588,9 @@ async function refresh() {
   renderClusters();
   renderNodes();
   renderExperiments();
+  if (document.getElementById('page-latency').classList.contains('active')) {
+    renderLatencyMatrix();
+  }
 }
 
 // ── Navigation ────────────────────────────────────────────────────
@@ -415,6 +602,7 @@ function showPage(id) {
   document.getElementById('page-' + id).classList.add('active');
   if (id === 'experiments') loadExperiments();
   if (id === 'reports') loadReports();
+  if (id === 'latency') { loadLatencyState().then(() => renderLatencyMatrix()); }
 }
 
 // ── Clusters ──────────────────────────────────────────────────────

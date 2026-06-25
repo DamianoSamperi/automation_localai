@@ -228,7 +228,7 @@ func (m *Manager) snapshotClusterAnnotations(clusterID string) {
 		suffix := w.NodeName
 		if suffix == "" {
 			// Worker without a pinned node — find its deployment by listing
-			// deployments with cluster-id label and role=worker.
+			// deployments with group label and role=worker.
 			continue
 		}
 		workerDeploy := fmt.Sprintf("localai-worker-%s-%s", clusterID, suffix)
@@ -244,7 +244,7 @@ func (m *Manager) snapshotClusterAnnotations(clusterID string) {
 	// Also list any worker deployments not pinned (NodeName=="")
 	listOut, err := exec.Command("kubectl", "get", "deployment",
 		"-n", "local-ai",
-		"-l", fmt.Sprintf("cluster-id=%s,role=worker", clusterID),
+		"-l", fmt.Sprintf("group=%s,role=worker", clusterID),
 		"-o", "jsonpath={range .items[*]}{.metadata.name}{\"\\n\"}{end}",
 	).Output()
 	if err == nil {

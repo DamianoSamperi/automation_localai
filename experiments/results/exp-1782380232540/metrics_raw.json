@@ -1,0 +1,1445 @@
+{
+  "cluster-1": {
+    "cpu_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "0.01300704746216254"
+          ]
+        ]
+      }
+    ],
+    "cpu_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "1.3008197615972314"
+          ]
+        ]
+      }
+    ],
+    "network_drops": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "9.566778714805242"
+          ]
+        ]
+      }
+    ],
+    "network_rx_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "167763.26963906584"
+          ]
+        ]
+      }
+    ],
+    "network_rx_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "1036289.4224392683"
+          ]
+        ]
+      }
+    ],
+    "network_tx_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "129101.08516159472"
+          ]
+        ]
+      }
+    ],
+    "network_tx_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "916151.461905934"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_steal_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "0"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_steal_worker1": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "0"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_steal_worker2": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "0.03999999999999915"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_usage_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "69.95000000001164"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_usage_worker1": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "2.7099999999918523"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_usage_worker2": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "2.7899999999935976"
+          ]
+        ]
+      }
+    ],
+    "node_mem_available_master": [
+      {
+        "metric": {
+          "__name__": "node_memory_MemAvailable_bytes",
+          "container": "node-exporter",
+          "endpoint": "http-metrics",
+          "instance": "jetsonorigin",
+          "job": "node-exporter",
+          "namespace": "observability",
+          "pod": "prometheus-stack-prometheus-node-exporter-6gntf",
+          "service": "prometheus-stack-prometheus-node-exporter"
+        },
+        "values": [
+          [
+            1782380233,
+            "53647798272"
+          ]
+        ]
+      }
+    ],
+    "node_mem_available_worker1": [
+      {
+        "metric": {
+          "__name__": "node_memory_MemAvailable_bytes",
+          "container": "node-exporter",
+          "endpoint": "http-metrics",
+          "instance": "ds-cluster-01-worker-01",
+          "job": "node-exporter",
+          "namespace": "observability",
+          "pod": "prometheus-stack-prometheus-node-exporter-7tvbn",
+          "service": "prometheus-stack-prometheus-node-exporter"
+        },
+        "values": [
+          [
+            1782380233,
+            "7220269056"
+          ]
+        ]
+      }
+    ],
+    "node_mem_available_worker2": [
+      {
+        "metric": {
+          "__name__": "node_memory_MemAvailable_bytes",
+          "container": "node-exporter",
+          "endpoint": "http-metrics",
+          "instance": "ds-cluster-01-worker-02",
+          "job": "node-exporter",
+          "namespace": "observability",
+          "pod": "prometheus-stack-prometheus-node-exporter-768pg",
+          "service": "prometheus-stack-prometheus-node-exporter"
+        },
+        "values": [
+          [
+            1782380233,
+            "6959845376"
+          ]
+        ]
+      }
+    ],
+    "node_net_drop_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "1.12"
+          ]
+        ]
+      }
+    ],
+    "node_net_rx_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "901387.36"
+          ]
+        ]
+      }
+    ],
+    "node_net_rx_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "710902.92"
+          ]
+        ]
+      }
+    ],
+    "node_net_tx_drop_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "0.52"
+          ]
+        ]
+      }
+    ],
+    "node_net_tx_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "818866.2000000001"
+          ]
+        ]
+      }
+    ],
+    "node_net_tx_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "650872.16"
+          ]
+        ]
+      }
+    ],
+    "ram_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "1002139648"
+          ]
+        ]
+      }
+    ],
+    "ram_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "676827136"
+          ]
+        ]
+      }
+    ]
+  },
+  "cluster-2": {
+    "cpu_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "0.02745857115098805"
+          ]
+        ]
+      }
+    ],
+    "cpu_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "1.3089472708258796"
+          ]
+        ]
+      }
+    ],
+    "network_drops": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "9.566778714805242"
+          ]
+        ]
+      }
+    ],
+    "network_rx_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "51967.44328381549"
+          ]
+        ]
+      }
+    ],
+    "network_rx_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "998415.3348895673"
+          ]
+        ]
+      }
+    ],
+    "network_tx_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "43565.317670054734"
+          ]
+        ]
+      }
+    ],
+    "network_tx_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "867804.4532231999"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_steal_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "0"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_steal_worker1": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "0"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_steal_worker2": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "0.03999999999999915"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_usage_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "69.95000000001164"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_usage_worker1": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "2.7099999999918523"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_usage_worker2": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "2.7899999999935976"
+          ]
+        ]
+      }
+    ],
+    "node_mem_available_master": [
+      {
+        "metric": {
+          "__name__": "node_memory_MemAvailable_bytes",
+          "container": "node-exporter",
+          "endpoint": "http-metrics",
+          "instance": "jetsonorigin",
+          "job": "node-exporter",
+          "namespace": "observability",
+          "pod": "prometheus-stack-prometheus-node-exporter-6gntf",
+          "service": "prometheus-stack-prometheus-node-exporter"
+        },
+        "values": [
+          [
+            1782380233,
+            "53647798272"
+          ]
+        ]
+      }
+    ],
+    "node_mem_available_worker1": [
+      {
+        "metric": {
+          "__name__": "node_memory_MemAvailable_bytes",
+          "container": "node-exporter",
+          "endpoint": "http-metrics",
+          "instance": "ds-cluster-01-worker-01",
+          "job": "node-exporter",
+          "namespace": "observability",
+          "pod": "prometheus-stack-prometheus-node-exporter-7tvbn",
+          "service": "prometheus-stack-prometheus-node-exporter"
+        },
+        "values": [
+          [
+            1782380233,
+            "7220269056"
+          ]
+        ]
+      }
+    ],
+    "node_mem_available_worker2": [
+      {
+        "metric": {
+          "__name__": "node_memory_MemAvailable_bytes",
+          "container": "node-exporter",
+          "endpoint": "http-metrics",
+          "instance": "ds-cluster-01-worker-02",
+          "job": "node-exporter",
+          "namespace": "observability",
+          "pod": "prometheus-stack-prometheus-node-exporter-768pg",
+          "service": "prometheus-stack-prometheus-node-exporter"
+        },
+        "values": [
+          [
+            1782380233,
+            "6959845376"
+          ]
+        ]
+      }
+    ],
+    "node_net_drop_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "1.12"
+          ]
+        ]
+      }
+    ],
+    "node_net_rx_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "901387.36"
+          ]
+        ]
+      }
+    ],
+    "node_net_rx_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "710902.92"
+          ]
+        ]
+      }
+    ],
+    "node_net_tx_drop_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "0.52"
+          ]
+        ]
+      }
+    ],
+    "node_net_tx_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "818866.2000000001"
+          ]
+        ]
+      }
+    ],
+    "node_net_tx_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "650872.16"
+          ]
+        ]
+      }
+    ],
+    "ram_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "451973120"
+          ]
+        ]
+      }
+    ],
+    "ram_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "282640384"
+          ]
+        ]
+      }
+    ]
+  },
+  "cluster-3": {
+    "cpu_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "0.004114517259816883"
+          ]
+        ]
+      }
+    ],
+    "cpu_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "2.5275686381865414"
+          ]
+        ]
+      }
+    ],
+    "network_drops": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "9.566778714805242"
+          ]
+        ]
+      }
+    ],
+    "network_rx_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "1847087.0904044707"
+          ]
+        ]
+      }
+    ],
+    "network_tx_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "1714481.1821427275"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_steal_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "0"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_steal_worker1": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "0"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_steal_worker2": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "0.03999999999999915"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_usage_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "69.95000000001164"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_usage_worker1": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "2.7099999999918523"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_usage_worker2": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "2.7899999999935976"
+          ]
+        ]
+      }
+    ],
+    "node_mem_available_master": [
+      {
+        "metric": {
+          "__name__": "node_memory_MemAvailable_bytes",
+          "container": "node-exporter",
+          "endpoint": "http-metrics",
+          "instance": "jetsonorigin",
+          "job": "node-exporter",
+          "namespace": "observability",
+          "pod": "prometheus-stack-prometheus-node-exporter-6gntf",
+          "service": "prometheus-stack-prometheus-node-exporter"
+        },
+        "values": [
+          [
+            1782380233,
+            "53647798272"
+          ]
+        ]
+      }
+    ],
+    "node_mem_available_worker1": [
+      {
+        "metric": {
+          "__name__": "node_memory_MemAvailable_bytes",
+          "container": "node-exporter",
+          "endpoint": "http-metrics",
+          "instance": "ds-cluster-01-worker-01",
+          "job": "node-exporter",
+          "namespace": "observability",
+          "pod": "prometheus-stack-prometheus-node-exporter-7tvbn",
+          "service": "prometheus-stack-prometheus-node-exporter"
+        },
+        "values": [
+          [
+            1782380233,
+            "7220269056"
+          ]
+        ]
+      }
+    ],
+    "node_mem_available_worker2": [
+      {
+        "metric": {
+          "__name__": "node_memory_MemAvailable_bytes",
+          "container": "node-exporter",
+          "endpoint": "http-metrics",
+          "instance": "ds-cluster-01-worker-02",
+          "job": "node-exporter",
+          "namespace": "observability",
+          "pod": "prometheus-stack-prometheus-node-exporter-768pg",
+          "service": "prometheus-stack-prometheus-node-exporter"
+        },
+        "values": [
+          [
+            1782380233,
+            "6959845376"
+          ]
+        ]
+      }
+    ],
+    "node_net_drop_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "1.12"
+          ]
+        ]
+      }
+    ],
+    "node_net_rx_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "901387.36"
+          ]
+        ]
+      }
+    ],
+    "node_net_rx_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "710902.92"
+          ]
+        ]
+      }
+    ],
+    "node_net_tx_drop_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "0.52"
+          ]
+        ]
+      }
+    ],
+    "node_net_tx_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "818866.2000000001"
+          ]
+        ]
+      }
+    ],
+    "node_net_tx_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "650872.16"
+          ]
+        ]
+      }
+    ],
+    "ram_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "1105883136"
+          ]
+        ]
+      }
+    ],
+    "ram_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "665243648"
+          ]
+        ]
+      }
+    ]
+  },
+  "cluster-4": {
+    "cpu_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "0.036029413971636684"
+          ]
+        ]
+      }
+    ],
+    "cpu_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "1.3450077447162017"
+          ]
+        ]
+      }
+    ],
+    "network_drops": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "9.566778714805242"
+          ]
+        ]
+      }
+    ],
+    "network_rx_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "106273.79508942104"
+          ]
+        ]
+      }
+    ],
+    "network_rx_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "1032545.6222119643"
+          ]
+        ]
+      }
+    ],
+    "network_tx_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "80942.86147317369"
+          ]
+        ]
+      }
+    ],
+    "network_tx_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "937330.456726571"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_steal_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "0"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_steal_worker1": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "0"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_steal_worker2": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "0.03999999999999915"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_usage_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "69.95000000001164"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_usage_worker1": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "2.7099999999918523"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_usage_worker2": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "2.7899999999935976"
+          ]
+        ]
+      }
+    ],
+    "node_mem_available_master": [
+      {
+        "metric": {
+          "__name__": "node_memory_MemAvailable_bytes",
+          "container": "node-exporter",
+          "endpoint": "http-metrics",
+          "instance": "jetsonorigin",
+          "job": "node-exporter",
+          "namespace": "observability",
+          "pod": "prometheus-stack-prometheus-node-exporter-6gntf",
+          "service": "prometheus-stack-prometheus-node-exporter"
+        },
+        "values": [
+          [
+            1782380233,
+            "53647798272"
+          ]
+        ]
+      }
+    ],
+    "node_mem_available_worker1": [
+      {
+        "metric": {
+          "__name__": "node_memory_MemAvailable_bytes",
+          "container": "node-exporter",
+          "endpoint": "http-metrics",
+          "instance": "ds-cluster-01-worker-01",
+          "job": "node-exporter",
+          "namespace": "observability",
+          "pod": "prometheus-stack-prometheus-node-exporter-7tvbn",
+          "service": "prometheus-stack-prometheus-node-exporter"
+        },
+        "values": [
+          [
+            1782380233,
+            "7220269056"
+          ]
+        ]
+      }
+    ],
+    "node_mem_available_worker2": [
+      {
+        "metric": {
+          "__name__": "node_memory_MemAvailable_bytes",
+          "container": "node-exporter",
+          "endpoint": "http-metrics",
+          "instance": "ds-cluster-01-worker-02",
+          "job": "node-exporter",
+          "namespace": "observability",
+          "pod": "prometheus-stack-prometheus-node-exporter-768pg",
+          "service": "prometheus-stack-prometheus-node-exporter"
+        },
+        "values": [
+          [
+            1782380233,
+            "6959845376"
+          ]
+        ]
+      }
+    ],
+    "node_net_drop_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "1.12"
+          ]
+        ]
+      }
+    ],
+    "node_net_rx_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "901387.36"
+          ]
+        ]
+      }
+    ],
+    "node_net_rx_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "710902.92"
+          ]
+        ]
+      }
+    ],
+    "node_net_tx_drop_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "0.52"
+          ]
+        ]
+      }
+    ],
+    "node_net_tx_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "818866.2000000001"
+          ]
+        ]
+      }
+    ],
+    "node_net_tx_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "650872.16"
+          ]
+        ]
+      }
+    ],
+    "ram_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "9315737600"
+          ]
+        ]
+      }
+    ],
+    "ram_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "479436800"
+          ]
+        ]
+      }
+    ]
+  },
+  "cluster-6": {
+    "cpu_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "0.015441862919417841"
+          ]
+        ]
+      }
+    ],
+    "cpu_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "1.1037325088417316"
+          ]
+        ]
+      }
+    ],
+    "network_drops": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "9.566778714805242"
+          ]
+        ]
+      }
+    ],
+    "network_rx_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "151705.62982783455"
+          ]
+        ]
+      }
+    ],
+    "network_rx_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "914926.8359392807"
+          ]
+        ]
+      }
+    ],
+    "network_tx_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "83638.43930020949"
+          ]
+        ]
+      }
+    ],
+    "network_tx_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "814300.7703879292"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_steal_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "0"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_steal_worker1": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "0"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_steal_worker2": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "0.03999999999999915"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_usage_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "69.95000000001164"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_usage_worker1": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "2.7099999999918523"
+          ]
+        ]
+      }
+    ],
+    "node_cpu_usage_worker2": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "2.7899999999935976"
+          ]
+        ]
+      }
+    ],
+    "node_mem_available_master": [
+      {
+        "metric": {
+          "__name__": "node_memory_MemAvailable_bytes",
+          "container": "node-exporter",
+          "endpoint": "http-metrics",
+          "instance": "jetsonorigin",
+          "job": "node-exporter",
+          "namespace": "observability",
+          "pod": "prometheus-stack-prometheus-node-exporter-6gntf",
+          "service": "prometheus-stack-prometheus-node-exporter"
+        },
+        "values": [
+          [
+            1782380233,
+            "53647798272"
+          ]
+        ]
+      }
+    ],
+    "node_mem_available_worker1": [
+      {
+        "metric": {
+          "__name__": "node_memory_MemAvailable_bytes",
+          "container": "node-exporter",
+          "endpoint": "http-metrics",
+          "instance": "ds-cluster-01-worker-01",
+          "job": "node-exporter",
+          "namespace": "observability",
+          "pod": "prometheus-stack-prometheus-node-exporter-7tvbn",
+          "service": "prometheus-stack-prometheus-node-exporter"
+        },
+        "values": [
+          [
+            1782380233,
+            "7220269056"
+          ]
+        ]
+      }
+    ],
+    "node_mem_available_worker2": [
+      {
+        "metric": {
+          "__name__": "node_memory_MemAvailable_bytes",
+          "container": "node-exporter",
+          "endpoint": "http-metrics",
+          "instance": "ds-cluster-01-worker-02",
+          "job": "node-exporter",
+          "namespace": "observability",
+          "pod": "prometheus-stack-prometheus-node-exporter-768pg",
+          "service": "prometheus-stack-prometheus-node-exporter"
+        },
+        "values": [
+          [
+            1782380233,
+            "6959845376"
+          ]
+        ]
+      }
+    ],
+    "node_net_drop_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "1.12"
+          ]
+        ]
+      }
+    ],
+    "node_net_rx_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "901387.36"
+          ]
+        ]
+      }
+    ],
+    "node_net_rx_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "710902.92"
+          ]
+        ]
+      }
+    ],
+    "node_net_tx_drop_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "0.52"
+          ]
+        ]
+      }
+    ],
+    "node_net_tx_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "818866.2000000001"
+          ]
+        ]
+      }
+    ],
+    "node_net_tx_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "650872.16"
+          ]
+        ]
+      }
+    ],
+    "ram_master": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "422256640"
+          ]
+        ]
+      }
+    ],
+    "ram_workers": [
+      {
+        "metric": {},
+        "values": [
+          [
+            1782380233,
+            "488734720"
+          ]
+        ]
+      }
+    ]
+  }
+}

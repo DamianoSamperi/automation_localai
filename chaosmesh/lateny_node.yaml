@@ -1,0 +1,23 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: latency-worker01-to-worker02
+  namespace: local-ai
+spec:
+  action: delay
+  mode: all
+  selector:
+    namespaces:
+      - local-ai
+    fieldSelectors:
+      spec.nodeName: ds-cluster-01-worker-01
+  delay:
+    latency: "30ms"
+  direction: to
+  target:
+    mode: all
+    selector:
+      namespaces:
+        - local-ai
+      fieldSelectors:
+        spec.nodeName: ds-cluster-01-worker-02
